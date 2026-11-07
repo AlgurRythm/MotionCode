@@ -1,173 +1,282 @@
-# MotionCode
+# MotionCode Reference
 
 ## Description
 
-MotionCode is a motion graphics app for people who want results without hours of keyframing.
-You describe a motion in a few simple lines, see it play back instantly, and export it as a
-finished video, a GIF, a set of PNG frames, or a sound file.
+MotionCode is a motion graphics application. A motion graphic is written as two short
+scripts: a video script that creates and animates shapes, text and 3D objects, and an audio
+script that builds the sound. The app runs both on the same timeline, shows the result in a
+live preview, and exports finished video, GIF, image sequence or audio files.
 
-You do not need to be a programmer. You only need to be willing to write a line or two and
-press a button to see what happens. Every change shows up in the preview the moment you apply it,
-so experimenting is quick.
-
-## Creator
+## Owner
 
 **Vince Winter**
 
-## What it is for
+## Start here
 
-MotionCode is for making motion graphics that are clean, repeatable and easy to change:
+If you want to understand the app without code, open **Basic.md**. It explains every task
+in plain language: changing the motion and sound, the theme, settings, export, saving,
+opening projects, fonts, credits and the Data folder.
 
-- Title cards, lower thirds and logo reveals
-- Animated diagrams and explainers
-- Looping backgrounds
-- Social media clips in square and vertical sizes
-- Text that rises, fades or flips in sequence
-- Short pieces with a matching soundtrack
-
-It does not edit footage, record your screen, or replace a full video editor. Make the
-graphics and sound here, export them, and finish the edit in your usual editor.
+This document is the detailed reference. It lists every public name a script can use.
 
 ---
 
-## How to use it
+## How the software works
 
-### Start a new project
-
-Open MotionCode. A starter animation is already loaded so you can see how it works.
-To begin with an empty project, choose **File**, then **New**.
-
-### Change the motion
-
-Every animation has two parts, and you edit them in the left panel:
-
-- The **video** part sets up what appears on screen and how it moves.
-- The **audio** part sets up the sound.
-
-Change a number, such as a colour, a size or a timing, then press **Apply Code** at the top.
-The preview updates straight away. If a line turns red, the log at the bottom explains the
-mistake. Fix the line and apply again.
-
-### Add sound
-
-Edit the **audio** part, then press **Apply Audio** above the audio panel. You can add a background
-mood, a single tone, a click, or a sound effect. The sound plays in the preview and goes into your export.
-
-### Preview the animation
-
-- Press **Play** to watch it, and press it again to pause.
-- Drag the timeline to jump to any moment.
-- Change **Speed** to watch it slower or faster.
-
-### Change the theme
-
-Look at the top-right corner. Click the **Theme** button to switch between **Dark**, **Bright**
-and **OLED**. Your choice is remembered.
-
-### Change the settings
-
-The **Settings** box below the preview holds the options:
-
-- **Resolution** sets the picture size.
-- **Resolution elements** sets how heavy the visual effects are. Higher settings look better and
-  take longer. Choose from Ultra, High, Balanced, Medium, Low and Very low.
-- **FPS** sets how smooth the motion is. Higher values need more work.
-- **Speed** sets how fast the animation plays.
-- **Encoder** chooses CPU, or NVIDIA if your graphics card supports it.
-- **Volume** sets the sound level.
-
-### Export your work
-
-1. Choose **File**, then **Export**.
-2. Pick a file type: a video (MP4, MOV, MKV, WebM or GIF), a sound file (WAV, FLAC, M4A, MP3, OGG
-   or Opus), or a folder of PNG images.
-3. Set the resolution, frame rate, resolution elements and compression.
-   Compression trades quality for file size, and the lowest setting is nearly lossless.
-4. Press **Export**, then choose where to save.
-5. A progress window shows how much is done and how long is left. Press **Cancel** to stop.
-
-Video files play in common players. The sound is added to the video automatically.
-MotionCode remembers your last export settings and the folder you saved to.
-
-### Save a project
-
-1. Choose **File**, then **Save Project**.
-2. The first time, pick a name and a place. Your video and sound parts are saved together in one file.
-3. To keep a separate copy, choose **Save Project As**.
-
-### Open a project
-
-1. Choose **File**, then **Open Project**.
-2. Select the project file. Both the video and sound parts load, and the preview updates.
-
-### Recover unsaved work
-
-MotionCode saves a backup of your work every few seconds. If the app closes unexpectedly,
-it offers to restore your last work the next time you open it.
-
-### Check before a long export
-
-Choose **File**, then **Check Script**. It runs through the whole animation and reports any problems
-without exporting anything. Use it before a long export.
-
-### Add fonts
-
-1. Open the **Fonts** menu.
-2. Choose **Import font** and pick a `.ttf` or `.otf` file.
-3. To see what is available, choose **Default fonts and licenses**.
-4. To find your fonts on disk, choose **Open fonts folder**.
-
-Once a font is installed, you can pick it by name in the text settings.
-
-### Add your own 3D models
-
-Put a `.obj` file in the **Data** folder next to the app. Then use it by its file name in the video part.
-MotionCode finds it there, so you do not need to type the full path.
-
-### Add sound and image files
-
-1. In the **Assets** panel, click **Import** and pick your files.
-2. Double-click an audio file in the list to hear it.
-3. Use the file in the audio part by its name, and choose when it starts.
-
-### Add your credits and licences
-
-1. Open the **Data** folder next to the app.
-2. Put your text in a file called `CREDITS.md`. Optional files: `LICENSE`, `NOTICE` and
-   `THIRD_PARTY_NOTICES.md`.
-3. Open the **Credits** menu. **Credits** shows your credits. **License**, **Notice** and
-   **Third-party notices** show the other files.
-4. If a file is missing, the log tells you its name.
-
-### Understand the Data folder
-
-Everything the app keeps is in one **Data** folder next to the program:
-
-- **CREDITS.md** and the licence files, for the Credits menu
-- **export_settings.json**, your remembered export choices (created by the app)
-- **motioncode_settings.ini**, remembered preferences such as the theme (created by the app)
-- **cache**, the automatic backups (created by the app)
-- **projects**, your saved projects
-- **fonts** and **assets**, the fonts and sound or image files you import
-- your **3D models**
-
-### Move objects and change layers
-
-- Drag items in the **Scene list** to change their order. The item at the top is drawn in front.
-- Select an item to see its **Inspector**. Change its position, rotation, size or opacity, and watch the preview.
-- Inspector changes are lost when you press **Apply Code**. Once you like a value, write it into the animation.
-
-### Fix a problem
-
-- A red line in the editor means something is wrong there.
-- The log at the bottom explains what it is and which line to check.
-- Press **Ctrl+Space** in an editor to see the words the app understands.
+1. **Two scripts, one timeline.** The video script has a `build` step that runs once to
+   create objects, and an `animate` step that runs for every frame with the time `t` in
+   seconds. The audio script has a `build_audio` step that places sounds on the same timeline.
+2. **Every frame is a function of time.** The app calls `animate` with a time and draws what
+   it sees. Because nothing depends on the previous frame, scrubbing, previewing and exporting
+   give the same picture.
+3. **Layers.** Objects are drawn in list order. Later objects sit in front. Layer motion can move
+   an object up or down the list over time.
+4. **Quality levels.** The Resolution elements setting only changes heavy effects (blur,
+   lighting, motion blur, supersampling). Every object is always drawn.
+5. **Export.** The export worker renders each frame with the same function the preview uses,
+   sends frames to ffmpeg, and writes the file. The sound is mixed at the same speed as the picture.
+6. **Files.** Projects are `.mcp` files holding both scripts. Settings, cache, fonts, assets and
+   3D models live in the Data folder next to the program.
 
 ---
 
-## Tips for getting good results
+## Full understanding needs an AI
 
-- Start with one or two objects and add more once the first one behaves.
-- Use **Check Script** after each big change.
-- Preview at a lower resolution while you work, and export at full size at the end.
-- Keep the sound length the same as the video length so they finish together.
+This reference lists the names, arguments and rules. It does not explain how to combine them into
+a good animation. To understand the whole system, including how the parts interact, how an
+animation is built step by step, and how to debug it, use an AI assistant that can read the
+MotionCode source files and this document together.
+
+---
+
+## Reference: scene and objects
+
+### Scene settings (set in `build`)
+
+| Name | Meaning |
+|------|---------|
+| `duration` | Length in seconds |
+| `fps` | Frames per second |
+| `width`, `height` | Picture size in pixels (default 1920 × 1080) |
+| `background` | Background colour, `#RRGGBB` |
+| `background_gradient` | A gradient for the background |
+| `lights`, `ambient` | Point lights and base brightness |
+| `motion_blur_samples` | Maximum motion blur sub-frames |
+| `camera_x`, `camera_y`, `camera_z`, `camera_fov` | Camera for 3D objects |
+| `bloom`, `bloom_threshold`, `bloom_radius` | Glow on bright areas |
+| `vignette`, `grain`, `aberration` | Dark edges, film grain, colour fringing |
+| `grade`, `grade_strength` | Colour tint over the whole frame |
+
+### Scene methods
+
+| Name | Meaning |
+|------|---------|
+| `get(name)` | The object with this name. Fails if it does not exist |
+| `get_optional(name)` | The object, or nothing |
+| `keyframes(target, property, points, ease)` | Animate a number between timed points |
+| `clear_keyframes(target, property)` | Remove keyframes |
+| `bring_to_front(name)`, `send_to_back(name)` | Change the layer |
+| `measure_text(text, size, font, bold, max_width)` | Width and height of text in pixels |
+| `list_fonts()` | Installed font family names |
+| `define_preset(name, **settings)` | Save a group of scene settings under a name |
+| `apply_preset(name)` | Apply a saved group |
+
+### Shapes (adding objects)
+
+| Name | Meaning |
+|------|---------|
+| `add_circle` | Circle, with `radius` |
+| `add_rect` | Rectangle, with `width` and `height` |
+| `add_rounded_rect` | Rectangle with rounded corners, with `radius` |
+| `add_ellipse` | Ellipse, with `radius_x` and `radius_y` |
+| `add_star` | Star, with `points`, `outer_radius`, `inner_radius` |
+| `add_polygon` | Closed shape from a list of points |
+| `add_polyline` | Open path from a list of points |
+| `add_line` | Line from its start point, with `x2` and `y2` for the end |
+| `add_text` | Text, with `size`, `font`, `bold`, `align`, `max_width` |
+| `add_image` | Picture file, with `width` and `height` |
+| `add_cube`, `add_sphere`, `add_pyramid`, `add_cone`, `add_cylinder`, `add_torus`, `add_plane` | 3D shapes, with `size` (cone and cylinder use `radius` and `height`) |
+| `add_obj` | 3D model file, with `scale` and `filled` |
+| `add_wireframe(vertices, edges)` | Your own 3D wireframe |
+
+### Object properties
+
+| Name | Meaning |
+|------|---------|
+| `x`, `y`, `z` | Position. `z` is depth for 3D |
+| `color`, `stroke`, `filled` | Colour, outline width, solid or outline |
+| `opacity` | 0 to 1 |
+| `scale`, `scale_x`, `scale_y` | Size, uniform or per axis |
+| `rotation_z` (also `rotation`) | Turn in degrees, clockwise positive |
+| `rotation_x`, `rotation_y` | Tilt for 3D objects, in degrees |
+| `skew_x` | Slant in degrees |
+| `parent` | Follow another object |
+| `blur`, `backdrop_blur`, `motion_blur` | Soft edge, frosted background, motion smear |
+| `blend` | `normal`, `add`, `screen` or `multiply` |
+| `shadow` | Drop shadow settings |
+| `gradient` | Colour gradient on a filled shape |
+| `lit` | Receives light from `lights` |
+
+### Easing names
+
+Used by `keyframes`, `ease=`: `linear`, `ease_in`, `ease_out`, `ease_in_out`, or your own curve
+built with `curve(points)`.
+
+---
+
+## Reference: transitions
+
+Import as `transitions`.
+
+| Name | Meaning |
+|------|---------|
+| `enter(obj, t, start, duration, style, base, distance)` | Bring an object in |
+| `exit(obj, t, start, duration, style, base, distance)` | Take an object out |
+| `visible_between(t, a, b, fade)` | Fade in and out between two times |
+| `fade_in`, `fade_out` | Opacity over time |
+| `slide_offset`, `pop_scale`, `zoom_scale` | Single values for custom motion |
+
+Styles: `fade`, `slide_left`, `slide_right`, `slide_up`, `slide_down`, `pop`, `zoom`.
+
+---
+
+## Reference: effects and styles (FeaturesPro)
+
+Import as `pro` (module `FeaturesPro`).
+
+### Styles
+
+`Styled(scene, name, shape, style, text, **settings)`. Shapes: `circle`, `rect`, `rounded_rect`,
+`ellipse`, `star`, `text`. Styles: `none`, `neon`, `brutal`, `paper`, `deco`, `holo`, `blueprint`,
+`isometric`, `handdrawn`, `pixel`.
+
+### Building helpers
+
+| Name | Meaning |
+|------|---------|
+| `Gradient(stops, kind, angle, center, radius)` | Colour gradient, `linear` or `radial` |
+| `Light(x, y, radius, intensity, color)` | Soft point light |
+| `liquid(scene, name, cx, cy, radius, ...)` | Wobbling blob |
+| `kinetic(scene, name, text, cx, cy, ...)` | Letters that rise in turn |
+| `split_flap(scene, name, states, cx, cy, ...)` | Departure-board letters |
+| `bounce(scene, name, shape, x, drop_y, floor_y, ...)` | Object that falls and bounces |
+| `grid(scene, name, step, color, width, area)` | Blueprint grid |
+| `deco_frame(scene, name, cx, cy, width, height, ...)` | Art Deco frame with sunburst |
+| `dimension(scene, name, x1, y1, x2, y2, ...)` | Measurement line with label |
+| `stroke_draw(scene, name, points, t_start, duration, ...)` | Outline drawn progressively |
+| `pixel_sprite(scene, name, bitmap, cx, cy, ...)` | Pixel art from text rows |
+| `iso_box(scene, name, cx, cy, ...)` | Isometric box |
+| `paper_sheet(scene, name, cx, cy, w, h, ...)` | Cut-paper sheet |
+| `caption(scene, name, text, cx, y, start, end, ...)` | Text that fades in and out |
+| `emitter(scene, name, x, y, ...)` | Continuous particles |
+| `Burst(prefix, x, y, t0, ...)` | One-off particle burst |
+| `Trail(prefix, pos_fn, ...)` | Ghost copies following a point |
+| `mask(scene, shape_name, mode, targets, strength, color, feather)` | Hide, blur or tint what is behind a shape |
+| `layer(scene, name, keys, ease)` | Move an object through the layer order over time |
+
+### Per-frame helpers
+
+| Name | Meaning |
+|------|---------|
+| `update_all(scene, t)` | Update all FeaturesPro objects. Call last in `animate` |
+| `set_quality(key)` | Set Resolution elements: `very_low`, `low`, `medium`, `balanced`, `high`, `ultra` |
+| `set_pixel_palette(name)` | `mint`, `retro` or `mono` |
+| `ease_out_cubic`, `ease_in_out_cubic`, `ease_out_back`, `ease_out_elastic`, `ease_out_bounce` | Easing curves |
+| `progress(t, start, duration, ease)` | Eased 0 to 1 progress |
+| `spring`, `squash_stretch` | Springy motion and squash |
+| `shake`, `wobble`, `flash` | Shake, sway and flash |
+| `typed(text, t, start, chars_per_second)` | Typewriter text |
+| `word_reveal(words, t, start, per_word)` | Word-by-word reveal |
+| `velocity_stretch(vx, vy, amount, max_stretch)` | Stretch along movement |
+
+---
+
+## Reference: sound (audio script)
+
+The audio script receives one object, `audio`, in `build_audio(audio)`.
+
+### Audio settings
+
+| Name | Meaning |
+|------|---------|
+| `duration` | Length in seconds. Keep equal to the video |
+| `sample_rate` | Sample rate, default 44100 |
+| `master_volume` | Overall level |
+
+### Audio methods
+
+| Name | Meaning |
+|------|---------|
+| `add_tone(name, freq, start, length, volume, fade_in, fade_out, wave, pan)` | A pure tone |
+| `add_mood(name, mood, start, length, base_freq, volume, fade_in, fade_out, pan)` | A background bed with a mood |
+| `add_noise(name, start, length, volume, fade_in, fade_out, pan)` | Hiss or texture |
+| `add_click(name, at, volume, freq, pan)` | Short click |
+| `add_clip(name, path, at, volume)` | Sound file from the Data or assets folder |
+
+Moods: `happy`, `sad`, `calm`, `quiet`, `soft`, `loud`, `excited`, `tense`, `neutral`.
+Waves: `sine`, `square`, `triangle`, `saw`. Pan: -1 is full left, 0 centre, +1 full right.
+
+---
+
+## Reference: export
+
+| Setting | Options |
+|---------|---------|
+| File type (video) | MP4, MOV, MKV, WebM, GIF |
+| File type (audio) | WAV, FLAC, M4A, MP3, OGG, Opus |
+| File type (images) | PNG frames |
+| Resolution | 4K, 2K, 1080p, 1K, 720p, 480p, 360p, square 1080, vertical 1080 × 1920 |
+| FPS | 15 to 120 |
+| Resolution elements | Ultra, High, Balanced, Medium, Low, Very low |
+| Compression | Lossless, High, Standard, Small, Tiny (lower CRF is better) |
+| Encoder | CPU (libx264) or NVIDIA (h264_nvenc) |
+
+Video is H.264 (WebM uses VP9) in 4:2:0 with BT.709 colour tags. The audio track is chosen
+automatically for each file type. Export settings and the last save folder are saved to
+`export_settings.json` in the Data folder.
+
+---
+
+## Reference: files and folders
+
+| Item | Meaning |
+|------|---------|
+| `.mcp` | Project file with both scripts |
+| `Data/` | Settings, cache, projects, fonts, assets, 3D models, credits and licences |
+| `Data/CREDITS.md` | Credits text, opened from the Credits menu |
+| `Data/LICENSE`, `NOTICE`, `THIRD_PARTY_NOTICES.md` | Licence files |
+| `Data/cache/` | Automatic backups of scripts |
+| `Data/fonts/` | Installed fonts (`.ttf`, `.otf`) |
+| `Data/assets/` | Imported sound and image files |
+
+---
+
+## Specialisations
+
+MotionCode suits these kinds of motion work. Each uses the parts listed above.
+
+- **Kinetic typography.** Letters and words that rise, fade, flip or type on: `kinetic`,
+  `word_reveal`, `typed`, `caption`, `split_flap`.
+- **Title and logo reveals.** Entrances and exits with overshoot, stroke drawing and glow:
+  `enter`, `exit`, `pop`, `zoom`, `stroke_draw`, `bloom`.
+- **Explainers and diagrams.** Lines, arrows, measurements and progressive drawing: `add_line`,
+  `dimension`, `stroke_draw`, `layer`, `bring_to_front`.
+- **Retro and pixel graphics.** Grids, pixel sprites and palette colours: `pixel_sprite`, `grid`,
+  `set_pixel_palette`, the `pixel` style.
+- **Stylised 2D looks.** Neon, brutal, paper, Art Deco, holographic and blueprint: `Styled`,
+  `deco_frame`, `paper_sheet`, `gradient`.
+- **3D product and object spins.** Built-in shapes, OBJ models and wireframes with lighting:
+  `add_cube`, `add_obj`, `add_wireframe`, `Light`, `rotation_x/y/z`.
+- **Particles and energy.** Bursts, emitters, trails and glow: `Burst`, `emitter`, `Trail`, `blend="add"`,
+  `bloom`.
+- **Motion with physics feel.** Bounce, spring, squash and stretch, shake: `bounce`, `spring`,
+  `squash_stretch`, `shake`, `velocity_stretch`.
+- **Liquid and organic shapes.** Blobs and morphing outlines: `liquid`, `Gradient`.
+- **Masks and reveals.** Hide, blur or tint parts of the picture behind a shape: `mask`,
+  `backdrop_blur`, `Mask`.
+- **Sound-led motion.** Animation timed to a soundtrack built from moods, tones, clicks and noise:
+  `add_mood`, `add_click`, `add_noise`, `add_clip`.
+- **Social and square formats.** Square and vertical exports with fast, short motion, using
+  the export presets and resolution list.
+- **Explainer characters and figures.** Parent-and-child rigs: `parent`, rotation of children
+  relative to parents, `add_ellipse`, `add_polygon`.
