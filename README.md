@@ -2,272 +2,172 @@
 
 ## Description
 
-MotionCode turns code into motion graphics. You write the shapes, text, movement and sound
-as short Python scripts, watch every frame update in a live preview as you type, and export
-the result as a video, a GIF, PNG frames or an audio file.
+MotionCode is a motion graphics app for people who want results without hours of keyframing.
+You describe a motion in a few simple lines, see it play back instantly, and export it as a
+finished video, a GIF, a set of PNG frames, or a sound file.
 
-Nothing is hidden behind a timeline of clicks. Every position, colour, rotation and sound
-is a value you can read, change and reuse, so a design that takes an hour to tweak by hand
-can be changed in one line and re-applied in a second.
+You do not need to be a programmer. You only need to be willing to write a line or two and
+press a button to see what happens. Every change shows up in the preview the moment you apply it,
+so experimenting is quick.
 
 ## Creator
 
 **Vince Winter**
 
-## What it is used for
+## What it is for
 
-MotionCode can make a wide range of motion graphics, as long as the effect can be described
-in code. It is a good fit for:
+MotionCode is for making motion graphics that are clean, repeatable and easy to change:
 
 - Title cards, lower thirds and logo reveals
-- Animated diagrams, charts and explainers
-- Looping backgrounds and visual loops
-- Social media clips in square and vertical formats
-- Kinetic type, where letters rise, fade or flip in sequence
-- Short films with a matching soundtrack made from tones, moods and clicks
-- Frame sequences for another editor
+- Animated diagrams and explainers
+- Looping backgrounds
+- Social media clips in square and vertical sizes
+- Text that rises, fades or flips in sequence
+- Short pieces with a matching soundtrack
 
-It is not a replacement for a full video editor. It does not edit footage, and it does not
-record your screen or camera. Use it to make the graphics and sound, then export them and
-combine them in your editor if you need to.
+It does not edit footage, record your screen, or replace a full video editor. Make the
+graphics and sound here, export them, and finish the edit in your usual editor.
 
 ---
 
-## Functions
+## How to use it
 
-Each section below is a task you can do in the app, with the steps to do it.
+### Start a new project
 
-### Start a project
+Open MotionCode. A starter animation is already loaded so you can see how it works.
+To begin with an empty project, choose **File**, then **New**.
 
-1. Open MotionCode. The starter script draws a ring, a title and a cube.
-2. To start fresh, choose **File > New**.
+### Change the motion
 
-### Update the video code
+Every animation has two parts, and you edit them in the left panel:
 
-1. Click in the **Video script** editor (left).
-2. Edit the `build(scene)` function to create objects, and the `animate(scene, t)`
-   function to move them. `t` is the time in seconds.
-3. Press **Apply Code** in the top bar. The preview updates.
-4. If something is wrong, the line turns red and the log explains why.
+- The **video** part sets up what appears on screen and how it moves.
+- The **audio** part sets up the sound.
 
-Minimal example:
+Change a number, such as a colour, a size or a timing, then press **Apply Code** at the top.
+The preview updates straight away. If a line turns red, the log at the bottom explains the
+mistake. Fix the line and apply again.
 
-```python
-import math
+### Add sound
 
-def build(scene):
-    scene.duration = 6
-    scene.fps = 30
-    scene.background = "#080D18"
-    scene.add_circle("Ring", x=960, y=540, radius=180, color="#35B9FF", stroke=8)
-    scene.add_text("Title", "HELLO", x=960, y=540, size=76, color="#FFFFFF")
+Edit the **audio** part, then press **Apply Audio** above the audio panel. You can add a background
+mood, a single tone, a click, or a sound effect. The sound plays in the preview and goes into your export.
 
-def animate(scene, t):
-    scene.get("Ring").rotation_z = t * 45          # degrees, clockwise
-    scene.get("Title").opacity = min(1, t / 1.5)
-```
+### Preview the animation
 
-Set absolute values in `animate`. Do not add to a value each frame, or it will keep
-growing when you scrub the timeline.
-
-### Update the audio code
-
-1. Click in the **Audio script** editor (middle).
-2. Edit `build_audio(audio)`. Add a mood bed, a tone, a click or a noise.
-3. Press **Apply Audio** (above the audio editor). The audio is ready for preview and export.
-
-```python
-def build_audio(audio):
-    audio.duration = 6              # keep this equal to the video length
-    audio.sample_rate = 44100
-    audio.master_volume = 0.8
-    audio.add_mood("bed", mood="calm", start=0, length=6, base_freq=220)
-    audio.add_click("tick", at=2, volume=0.3)
-```
-
-### Play and scrub the preview
-
-- Press **Play** to watch the animation. Press it again to pause.
-- Drag the timeline to jump to any moment. Keyframes appear as markers on it.
-- Change **Speed** in the Settings box to play faster or slower.
+- Press **Play** to watch it, and press it again to pause.
+- Drag the timeline to jump to any moment.
+- Change **Speed** to watch it slower or faster.
 
 ### Change the theme
 
-1. Look at the top-right corner of the menu bar.
-2. Click the **Theme** button. It cycles **Dark**, then **Bright**, then **OLED**.
-3. The choice is remembered for next time.
+Look at the top-right corner. Click the **Theme** button to switch between **Dark**, **Bright**
+and **OLED**. Your choice is remembered.
 
 ### Change the settings
 
-The **Settings** box (bottom of the window) holds the options that affect the preview and export:
+The **Settings** box below the preview holds the options:
 
-| Setting | How to change it |
-|---------|------------------|
-| **Resolution** | Choose from the list. The preview and the default export size follow it. |
-| **Resolution elements** | Choose Ultra, High, Balanced, Medium, Low or Very low. Higher levels draw the heavy effects at higher quality. Every object is always drawn. |
-| **FPS** | Type or pick a value from 15 to 120. Your script can also set it with `scene.fps`. |
-| **Speed** | Set the playback speed. Exports follow this speed too. |
-| **Encoder** | CPU (libx264) or NVIDIA (h264_nvenc, needs an NVIDIA GPU). |
-| **Volume** | Set the sound level from 0 to 150 percent. |
+- **Resolution** sets the picture size.
+- **Resolution elements** sets how heavy the visual effects are. Higher settings look better and
+  take longer. Choose from Ultra, High, Balanced, Medium, Low and Very low.
+- **FPS** sets how smooth the motion is. Higher values need more work.
+- **Speed** sets how fast the animation plays.
+- **Encoder** chooses CPU, or NVIDIA if your graphics card supports it.
+- **Volume** sets the sound level.
 
-### Export a video, GIF, PNG frames or audio
+### Export your work
 
-1. Choose **File > Export...**.
-2. Pick a **file type**: MP4, MOV, MKV, WebM, GIF, WAV, FLAC, M4A, MP3, OGG, Opus, or PNG frames.
-3. Set the **Resolution**, **FPS**, **Resolution elements** and **Compression**.
-   - Compression sets quality against file size. The lowest setting is nearly lossless.
-4. Press **Export** and choose where to save.
-5. A progress window shows the frame count and the time left. **Cancel** stops the export and
-   deletes the partial file.
+1. Choose **File**, then **Export**.
+2. Pick a file type: a video (MP4, MOV, MKV, WebM or GIF), a sound file (WAV, FLAC, M4A, MP3, OGG
+   or Opus), or a folder of PNG images.
+3. Set the resolution, frame rate, resolution elements and compression.
+   Compression trades quality for file size, and the lowest setting is nearly lossless.
+4. Press **Export**, then choose where to save.
+5. A progress window shows how much is done and how long is left. Press **Cancel** to stop.
 
-Video files are H.264 (WebM uses VP9) in standard colour, so they play in common players.
-The audio track is added automatically. Your choices and the last save folder are remembered.
-
-### Check a script before a long export
-
-- Choose **File > Check script**.
-- The app runs your code at the start, middle and end, without exporting, and reports any errors.
+Video files play in common players. The sound is added to the video automatically.
+MotionCode remembers your last export settings and the folder you saved to.
 
 ### Save a project
 
-1. Choose **File > Save Project**. The first time, it asks where to save.
-2. Your video and audio scripts are saved together in one `.mcp` file.
-3. Use **File > Save Project As** to save a copy under a new name.
+1. Choose **File**, then **Save Project**.
+2. The first time, pick a name and a place. Your video and sound parts are saved together in one file.
+3. To keep a separate copy, choose **Save Project As**.
 
 ### Open a project
 
-1. Choose **File > Open Project**.
-2. Select a `.mcp` file. Both scripts load and the preview updates.
-3. The folder you used last time is remembered.
+1. Choose **File**, then **Open Project**.
+2. Select the project file. Both the video and sound parts load, and the preview updates.
 
 ### Recover unsaved work
 
-- Your scripts are auto-saved every few seconds, in the `Data/cache` folder.
-- If the app closes unexpectedly, it offers to restore them the next time you open it.
+MotionCode saves a backup of your work every few seconds. If the app closes unexpectedly,
+it offers to restore your last work the next time you open it.
 
-### Use fonts
+### Check before a long export
+
+Choose **File**, then **Check Script**. It runs through the whole animation and reports any problems
+without exporting anything. Use it before a long export.
+
+### Add fonts
 
 1. Open the **Fonts** menu.
-2. **Default fonts and licenses...** lists fonts you can use, with their licences.
-3. **Import font...** copies a `.ttf` or `.otf` file into your fonts folder.
-4. **Open fonts folder** opens that folder.
-5. Use the font by its family name:
+2. Choose **Import font** and pick a `.ttf` or `.otf` file.
+3. To see what is available, choose **Default fonts and licenses**.
+4. To find your fonts on disk, choose **Open fonts folder**.
 
-```python
-scene.add_text("Title", "HELLO", x=960, y=540, size=90, font="Oswald")
-```
+Once a font is installed, you can pick it by name in the text settings.
 
-### Use your own 3D models
+### Add your own 3D models
 
-1. Put a `.obj` file in your **Data** folder.
-2. Load it by file name:
+Put a `.obj` file in the **Data** folder next to the app. Then use it by its file name in the video part.
+MotionCode finds it there, so you do not need to type the full path.
 
-```python
-scene.add_obj("Model", "your_model.obj", scale=1.0, filled=True)
-```
+### Add sound and image files
 
-### Use images and sound files
-
-1. Click **Import** in the Assets panel and pick the files. They are copied into your assets folder.
+1. In the **Assets** panel, click **Import** and pick your files.
 2. Double-click an audio file in the list to hear it.
-3. Place a sound on the timeline in the audio script:
-
-```python
-audio.add_clip("Sting", "sting.mp3", at=5.0)
-```
+3. Use the file in the audio part by its name, and choose when it starts.
 
 ### Add your credits and licences
 
-1. Put your text in the **Data** folder as `CREDITS.md`.
-   Optional: `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md`.
-2. Open the **Credits** menu:
-   - **Credits** opens `CREDITS.md`.
-   - **License**, **Notice** and **Third-party notices** open the other files.
-3. If a file is missing, the log names it.
+1. Open the **Data** folder next to the app.
+2. Put your text in a file called `CREDITS.md`. Optional files: `LICENSE`, `NOTICE` and
+   `THIRD_PARTY_NOTICES.md`.
+3. Open the **Credits** menu. **Credits** shows your credits. **License**, **Notice** and
+   **Third-party notices** show the other files.
+4. If a file is missing, the log tells you its name.
 
-### Set up the Data folder
+### Understand the Data folder
 
-Everything the app stores or reads lives in one **Data** folder next to `MotionCode.exe`:
+Everything the app keeps is in one **Data** folder next to the program:
 
-```
-MotionCode/
-  MotionCode.exe
-  Data/
-    CREDITS.md                 your credits
-    LICENSE, NOTICE            licence files
-    export_settings.json       remembered export choices (created by the app)
-    motioncode_settings.ini    remembered preferences, such as the theme (created by the app)
-    cache/                     auto-saved scripts (created by the app)
-    projects/                  project files
-    fonts/                     fonts you import
-    assets/                    sound and image files you import
-    your_model.obj             3D models
-```
+- **CREDITS.md** and the licence files, for the Credits menu
+- **export_settings.json**, your remembered export choices (created by the app)
+- **motioncode_settings.ini**, remembered preferences such as the theme (created by the app)
+- **cache**, the automatic backups (created by the app)
+- **projects**, your saved projects
+- **fonts** and **assets**, the fonts and sound or image files you import
+- your **3D models**
 
-### Use the effects and styles
+### Move objects and change layers
 
-Import **FeaturesPro** as `pro` for ready-made looks:
+- Drag items in the **Scene list** to change their order. The item at the top is drawn in front.
+- Select an item to see its **Inspector**. Change its position, rotation, size or opacity, and watch the preview.
+- Inspector changes are lost when you press **Apply Code**. Once you like a value, write it into the animation.
 
-```python
-import FeaturesPro as pro
+### Fix a problem
 
-def build(scene):
-    pro.Styled(scene, "Sign", "text", style="neon", text="OPEN", x=960, y=540, size=160)
-    scene.bloom = 0.6              # glow on bright pixels
-    scene.bloom_threshold = 0.7
-
-def animate(scene, t):
-    pro.update_all(scene, t)       # always the last line
-```
-
-Styles include `neon`, `brutal`, `paper`, `deco`, `holo`, `blueprint`, `isometric`,
-`handdrawn` and `pixel`.
-
-### Use transitions
-
-```python
-import transitions as tr
-
-def animate(scene, t):
-    title = scene.get("Title")
-    tr.enter(title, t, start=0.5, duration=0.6, style="slide_up", base=(960, 500), distance=60)
-    tr.exit(title, t, start=4.5, duration=0.5, style="fade", base=(960, 500))
-```
-
-Styles: `fade`, `slide_left`, `slide_right`, `slide_up`, `slide_down`, `pop`, `zoom`.
-
-### Change layer order
-
-- Drag rows in the **Scene list** (right side of the editor). The top row is drawn in front.
-- Or set it in the script with `scene.bring_to_front("Title")` and `scene.send_to_back("Background")`.
-
-### Edit values live
-
-- Select an object in the Scene list. The **Inspector** shows its position, rotation,
-  scale and opacity.
-- Changes show in the preview at once. They are lost when you press **Apply Code**, so write
-  the final value into the script.
-
-### Find and fix errors
-
-- A failing line turns red in the editor. The log below gives the reason.
-- Use **Ctrl+Space** in an editor to see names and keywords.
+- A red line in the editor means something is wrong there.
+- The log at the bottom explains what it is and which line to check.
+- Press **Ctrl+Space** in an editor to see the words the app understands.
 
 ---
 
-## Quick reference
+## Tips for getting good results
 
-```
-scene.duration = 10            scene.fps = 30
-scene.background = "#050812"   scene.width / scene.height
-scene.get(name)                scene.get_optional(name)
-scene.keyframes(obj, "x", [(0, 0), (2, 500)], ease="ease_out")
-scene.bring_to_front(name)     scene.send_to_back(name)
-
-import transitions as tr
-tr.enter(obj, t, start, duration, style, base=(x, y))
-tr.exit(obj, t, start, duration, style, base=(x, y))
-
-import FeaturesPro as pro
-pro.update_all(scene, t)       # last line of animate, when you use FeaturesPro
-```
+- Start with one or two objects and add more once the first one behaves.
+- Use **Check Script** after each big change.
+- Preview at a lower resolution while you work, and export at full size at the end.
+- Keep the sound length the same as the video length so they finish together.
