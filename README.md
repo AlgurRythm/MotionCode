@@ -1,57 +1,56 @@
 # MotionCode
 
-**Creator:** Vince Winter
+## Description
 
-**What it is:** MotionCode is a desktop app for making motion graphics and animated videos
-from short Python scripts. You describe the shapes, text, motion and sound in code, watch the
-result in a live preview, and export it as a video, GIF, PNG frames or an audio file.
+MotionCode turns code into motion graphics. You write the shapes, text, movement and sound
+as short Python scripts, watch every frame update in a live preview as you type, and export
+the result as a video, a GIF, PNG frames or an audio file.
 
-**Who it is for:** anyone who wants precise, repeatable motion graphics, such as title cards,
-logo reveals, animated diagrams, looping backgrounds, and social media clips in square or
-vertical formats, with a matching soundtrack.
+Nothing is hidden behind a timeline of clicks. Every position, colour, rotation and sound
+is a value you can read, change and reuse, so a design that takes an hour to tweak by hand
+can be changed in one line and re-applied in a second.
+
+## Creator
+
+**Vince Winter**
+
+## What it is used for
+
+MotionCode can make a wide range of motion graphics, as long as the effect can be described
+in code. It is a good fit for:
+
+- Title cards, lower thirds and logo reveals
+- Animated diagrams, charts and explainers
+- Looping backgrounds and visual loops
+- Social media clips in square and vertical formats
+- Kinetic type, where letters rise, fade or flip in sequence
+- Short films with a matching soundtrack made from tones, moods and clicks
+- Frame sequences for another editor
+
+It is not a replacement for a full video editor. It does not edit footage, and it does not
+record your screen or camera. Use it to make the graphics and sound, then export them and
+combine them in your editor if you need to.
 
 ---
 
 ## Functions
 
-From easy to hard. Start at the top.
+Each section below is a task you can do in the app, with the steps to do it.
 
-**Easy**
-- Draw shapes and text (circles, rectangles, stars, polygons, lines, text).
-- Set colours, position, size, opacity and rotation.
-- Play and scrub the timeline in the preview.
-- Export a video or PNG frames.
-- Add background sound with moods, tones and clicks.
-
-**Medium**
-- Animate with `animate(scene, t)` or with keyframes.
-- Use ready-made entrances and exits (`transitions`).
-- Change layer order by dragging in the Scene list.
-- Use finished looks from FeaturesPro, such as neon, brutal, paper and holo.
-- Use installed fonts by family name.
-- Import sound files and play them on the timeline.
-
-**Hard**
-- Parent objects so children follow a parent.
-- Masks that hide, blur or tint what is behind a shape.
-- Gradients and lights, and objects that react to light.
-- Motion blur, blend modes (add, screen, multiply) and drop shadows.
-- 3D meshes, OBJ models and custom wireframes.
-- Particles (`pro.Burst`, `pro.Emitter`) and ghost trails (`pro.Trail`).
-- Whole-frame effects: bloom, vignette, grain, colour grade and chromatic aberration.
-- Presets that store a group of scene settings.
-
----
-
-## Getting started
+### Start a project
 
 1. Open MotionCode. The starter script draws a ring, a title and a cube.
-2. Press **Apply Code** (top bar). The preview updates.
-3. Press **Play** or drag the timeline to check the motion.
-4. Edit the script and press **Apply Code** again.
-5. Choose **File > Export...** when you are happy with it.
+2. To start fresh, choose **File > New**.
 
-Minimal script:
+### Update the video code
+
+1. Click in the **Video script** editor (left).
+2. Edit the `build(scene)` function to create objects, and the `animate(scene, t)`
+   function to move them. `t` is the time in seconds.
+3. Press **Apply Code** in the top bar. The preview updates.
+4. If something is wrong, the line turns red and the log explains why.
+
+Minimal example:
 
 ```python
 import math
@@ -68,124 +67,191 @@ def animate(scene, t):
     scene.get("Title").opacity = min(1, t / 1.5)
 ```
 
-Every script has two functions. `build(scene)` runs once and creates objects. `animate(scene, t)`
-runs for every frame, with `t` in seconds. In `animate`, set absolute values, not values added
-each frame.
+Set absolute values in `animate`. Do not add to a value each frame, or it will keep
+growing when you scrub the timeline.
 
----
+### Update the audio code
 
-## The parts of the app
+1. Click in the **Audio script** editor (middle).
+2. Edit `build_audio(audio)`. Add a mood bed, a tone, a click or a noise.
+3. Press **Apply Audio** (above the audio editor). The audio is ready for preview and export.
 
-| Part | What it is for |
-|------|----------------|
-| **Top bar** | Apply Code, the menu bar (File, Fonts, Credits), and the theme button (top right). |
-| **File menu** | New, Open and Save Project, Check script, and Export. |
-| **Video script editor** | Your `build` and `animate` code. Errors turn the line red. |
-| **Audio script editor** | Your `build_audio` code for sound. |
-| **Preview** | Shows the scene. Play, pause and scrub. Keyframes show as markers on the timeline. |
-| **Scene list** | Every object, top first. Drag rows to change the layer order. |
-| **Inspector** | Edit an object's position, rotation, scale and opacity live. |
-| **Settings** | Resolution, Resolution elements (quality), FPS, Speed, Encoder and Volume. |
-| **Assets panel** | Files you imported for sound and images. Double-click to hear an audio file. |
-| **Log** | Every message and error, with the time. Red lines are errors. |
+```python
+def build_audio(audio):
+    audio.duration = 6              # keep this equal to the video length
+    audio.sample_rate = 44100
+    audio.master_volume = 0.8
+    audio.add_mood("bed", mood="calm", start=0, length=6, base_freq=220)
+    audio.add_click("tick", at=2, volume=0.3)
+```
 
-### Settings explained
+### Play and scrub the preview
 
-- **Resolution:** the size of the preview and the default export size.
-- **Resolution elements:** how heavy the effects are. Ultra, High, Balanced, Medium, Low and
-  Very low. Only effects change; every object is always drawn.
-- **FPS:** frames per second for the export. Your script can set it with `scene.fps`.
-- **Speed:** playback speed. Exports follow this speed too.
-- **Encoder:** CPU (libx264) or NVIDIA (h264_nvenc, needs an NVIDIA GPU).
-- **Volume:** the sound level, 0 to 150 percent.
+- Press **Play** to watch the animation. Press it again to pause.
+- Drag the timeline to jump to any moment. Keyframes appear as markers on it.
+- Change **Speed** in the Settings box to play faster or slower.
 
----
+### Change the theme
 
-## Set it up for your own use
+1. Look at the top-right corner of the menu bar.
+2. Click the **Theme** button. It cycles **Dark**, then **Bright**, then **OLED**.
+3. The choice is remembered for next time.
 
-Everything the app stores or reads lives in one **Data** folder next to `MotionCode.exe`.
+### Change the settings
+
+The **Settings** box (bottom of the window) holds the options that affect the preview and export:
+
+| Setting | How to change it |
+|---------|------------------|
+| **Resolution** | Choose from the list. The preview and the default export size follow it. |
+| **Resolution elements** | Choose Ultra, High, Balanced, Medium, Low or Very low. Higher levels draw the heavy effects at higher quality. Every object is always drawn. |
+| **FPS** | Type or pick a value from 15 to 120. Your script can also set it with `scene.fps`. |
+| **Speed** | Set the playback speed. Exports follow this speed too. |
+| **Encoder** | CPU (libx264) or NVIDIA (h264_nvenc, needs an NVIDIA GPU). |
+| **Volume** | Set the sound level from 0 to 150 percent. |
+
+### Export a video, GIF, PNG frames or audio
+
+1. Choose **File > Export...**.
+2. Pick a **file type**: MP4, MOV, MKV, WebM, GIF, WAV, FLAC, M4A, MP3, OGG, Opus, or PNG frames.
+3. Set the **Resolution**, **FPS**, **Resolution elements** and **Compression**.
+   - Compression sets quality against file size. The lowest setting is nearly lossless.
+4. Press **Export** and choose where to save.
+5. A progress window shows the frame count and the time left. **Cancel** stops the export and
+   deletes the partial file.
+
+Video files are H.264 (WebM uses VP9) in standard colour, so they play in common players.
+The audio track is added automatically. Your choices and the last save folder are remembered.
+
+### Check a script before a long export
+
+- Choose **File > Check script**.
+- The app runs your code at the start, middle and end, without exporting, and reports any errors.
+
+### Save a project
+
+1. Choose **File > Save Project**. The first time, it asks where to save.
+2. Your video and audio scripts are saved together in one `.mcp` file.
+3. Use **File > Save Project As** to save a copy under a new name.
+
+### Open a project
+
+1. Choose **File > Open Project**.
+2. Select a `.mcp` file. Both scripts load and the preview updates.
+3. The folder you used last time is remembered.
+
+### Recover unsaved work
+
+- Your scripts are auto-saved every few seconds, in the `Data/cache` folder.
+- If the app closes unexpectedly, it offers to restore them the next time you open it.
+
+### Use fonts
+
+1. Open the **Fonts** menu.
+2. **Default fonts and licenses...** lists fonts you can use, with their licences.
+3. **Import font...** copies a `.ttf` or `.otf` file into your fonts folder.
+4. **Open fonts folder** opens that folder.
+5. Use the font by its family name:
+
+```python
+scene.add_text("Title", "HELLO", x=960, y=540, size=90, font="Oswald")
+```
+
+### Use your own 3D models
+
+1. Put a `.obj` file in your **Data** folder.
+2. Load it by file name:
+
+```python
+scene.add_obj("Model", "your_model.obj", scale=1.0, filled=True)
+```
+
+### Use images and sound files
+
+1. Click **Import** in the Assets panel and pick the files. They are copied into your assets folder.
+2. Double-click an audio file in the list to hear it.
+3. Place a sound on the timeline in the audio script:
+
+```python
+audio.add_clip("Sting", "sting.mp3", at=5.0)
+```
+
+### Add your credits and licences
+
+1. Put your text in the **Data** folder as `CREDITS.md`.
+   Optional: `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md`.
+2. Open the **Credits** menu:
+   - **Credits** opens `CREDITS.md`.
+   - **License**, **Notice** and **Third-party notices** open the other files.
+3. If a file is missing, the log names it.
+
+### Set up the Data folder
+
+Everything the app stores or reads lives in one **Data** folder next to `MotionCode.exe`:
 
 ```
 MotionCode/
   MotionCode.exe
   Data/
-    CREDITS.md                 your credits text (or CREDITS.txt)
-    LICENSE                    licence text (opened from Credits > License)
-    NOTICE                     notice text (opened from Credits > Notice)
-    THIRD_PARTY_NOTICES.md     third-party notices
-    export_settings.json       remembered export choices and the last folder (created by the app)
-    motioncode_settings.ini    remembered preferences such as the theme (created by the app)
+    CREDITS.md                 your credits
+    LICENSE, NOTICE            licence files
+    export_settings.json       remembered export choices (created by the app)
+    motioncode_settings.ini    remembered preferences, such as the theme (created by the app)
     cache/                     auto-saved scripts (created by the app)
     projects/                  project files
-    fonts/                     fonts you install
+    fonts/                     fonts you import
     assets/                    sound and image files you import
-    your_model.obj             3D models, loaded by name
+    your_model.obj             3D models
 ```
 
-- **Your own credits:** put your text in `Data/CREDITS.md`, then open **Credits > Credits**.
-- **Your own models:** put a `.obj` file in `Data/` and load it with
-  `scene.add_obj("Model", "your_model.obj")`. No full path is needed.
-- **Your own fonts:** use **Fonts > Import font...** to copy a `.ttf` or `.otf` file in.
-  Then use its family name: `scene.add_text("T", "HELLO", font="Oswald")`.
-- **Your own theme:** click the top-right button to cycle Dark, Bright and OLED. The choice is remembered.
+### Use the effects and styles
 
----
+Import **FeaturesPro** as `pro` for ready-made looks:
 
-## Save your work
+```python
+import FeaturesPro as pro
 
-- **File > Save Project** saves your video and audio scripts into one `.mcp` file.
-- **File > Save Project As** chooses a new file.
-- **File > Open Project** loads a `.mcp` file.
-- The last project folder is remembered.
-- Scripts are also **auto-saved** every few seconds to `Data/cache`. If the app closes
-  unexpectedly, it offers to restore them next time.
+def build(scene):
+    pro.Styled(scene, "Sign", "text", style="neon", text="OPEN", x=960, y=540, size=160)
+    scene.bloom = 0.6              # glow on bright pixels
+    scene.bloom_threshold = 0.7
 
----
+def animate(scene, t):
+    pro.update_all(scene, t)       # always the last line
+```
 
-## Export
+Styles include `neon`, `brutal`, `paper`, `deco`, `holo`, `blueprint`, `isometric`,
+`handdrawn` and `pixel`.
 
-1. Choose **File > Export...**.
-2. Pick a **file type**: MP4, MOV, MKV, WebM, GIF, WAV, FLAC, M4A, MP3, OGG, Opus, or PNG frames.
-3. Set **Resolution** (up to 4K, plus square and vertical sizes), **FPS**,
-   **Resolution elements** and **Compression**.
-4. Press **Export**. A progress window shows the frame count and the time left. Cancel stops it
-   and deletes the partial file.
+### Use transitions
 
-Video is H.264 (WebM uses VP9) in standard colour, so it plays in common players. The audio track
-is chosen for you. Your settings and the last save folder are remembered in
-`Data/export_settings.json`.
+```python
+import transitions as tr
 
-**Check script** (File menu) runs your code at the start, middle and end without exporting. Use it
-before a long export.
+def animate(scene, t):
+    title = scene.get("Title")
+    tr.enter(title, t, start=0.5, duration=0.6, style="slide_up", base=(960, 500), distance=60)
+    tr.exit(title, t, start=4.5, duration=0.5, style="fade", base=(960, 500))
+```
 
----
+Styles: `fade`, `slide_left`, `slide_right`, `slide_up`, `slide_down`, `pop`, `zoom`.
 
-## Credits and licences
+### Change layer order
 
-**Credits > Credits** opens `Data/CREDITS.md`.
-**Credits > License**, **Notice** and **Third-party notices** open the licence files in `Data/`.
-If a file is missing, the log says which file to add to the Data folder.
+- Drag rows in the **Scene list** (right side of the editor). The top row is drawn in front.
+- Or set it in the script with `scene.bring_to_front("Title")` and `scene.send_to_back("Background")`.
 
----
+### Edit values live
 
-## Hidden features
+- Select an object in the Scene list. The **Inspector** shows its position, rotation,
+  scale and opacity.
+- Changes show in the preview at once. They are lost when you press **Apply Code**, so write
+  the final value into the script.
 
-- **Autocomplete:** type two letters, or press **Ctrl+Space**, to see names and keywords.
-- **Live Inspector:** change a value while watching the preview. Changes are lost on
-  Apply Code, so write the final value into the script.
-- **Keyframe markers:** hover over the timeline to see which properties are keyframed and when.
-- **Errors on the line:** a failing line is red in the editor, and the log shows the reason.
-- **Batch lines are ignored:** lines such as `@echo off` or `pause` in a script are skipped,
-  so scripts copied from a `.bat` file still run.
-- **Preview reuse:** the preview keeps recent frames, so scrubbing back is fast.
-- **Quality rebuild:** changing Resolution elements rebuilds scripts that depend on it.
-- **Sound preview:** double-click an imported audio file in the Assets panel to hear it.
-- **Fonts by name:** every font in `Data/fonts` loads at startup. Use its family name.
-- **Named presets:** `scene.define_preset("night", background="#050812")` saves scene settings
-  under a name. Apply them with `scene.apply_preset("night")` in `build`.
-- **Pixel palettes:** `pro.set_pixel_palette("retro")` changes the colours used by pixel-art styles.
-- **Clear selection:** press **Esc** in the Scene list to clear the selection.
-- **Recovery:** if the app closes unexpectedly, your last scripts come back on the next launch.
+### Find and fix errors
+
+- A failing line turns red in the editor. The log below gives the reason.
+- Use **Ctrl+Space** in an editor to see names and keywords.
 
 ---
 
