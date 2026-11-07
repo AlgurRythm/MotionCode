@@ -9,7 +9,7 @@ live preview, and exports finished video, GIF, image sequence or audio files.
 
 ## Owner
 
-**Vince Winter**
+**Vince Winter** and **Claude By Anthropic**
 
 ## Start here
 
