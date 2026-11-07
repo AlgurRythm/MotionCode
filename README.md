@@ -40,10 +40,36 @@ opening projects, fonts, credits and the Data folder.
 
 ## Full understanding needs an AI
 
-This document describes the software and the kinds of work it suits. It does not explain how to combine
-the tools into a good animation. To understand the whole system, including how the parts interact, how an
-animation is built step by step, and how to debug it, use an AI assistant that can read the
-MotionCode source files and this document together.
+This document describes the software and the kinds of work it suits. It does not explain how to
+combine the tools into a good animation, or how the parts interact in a real project.
+
+To learn the whole system, download the code library here:
+
+**[Download Motion-Code-Library.md](PASTE-YOUR-CODE-LINK-HERE)**
+
+Give that file and this reference to an AI assistant that can read them together.
+
+**Why it is needed.** This reference is an outline. The library holds the working code and the
+exact rules behind it. An AI that reads both can explain how a part works, write a script that
+uses it correctly, and find the cause when a script fails.
+
+**What the library contains:**
+
+- **The MotionCode database.** Every public part of the app, with the exact rules for rotation,
+  layers, timing, shapes, effects, sound and export.
+- **Physics and simulation.** Rigid collisions, cloth simulation and fluid particles, each with
+  its code and an explanation of how it is made.
+- **Character articulation.** A mug grab, a punch with a physical fall, and two-bone inverse
+  kinematics for stick figures.
+- **Motion examples.** Path motion, layout motion and character motion, with settings to change.
+- **Transitions and kinetic typography.** Two complete scripts, each explained part by part.
+- **Camera and cinematic examples.** A camera moving along a spline at constant speed, and real
+  shadows from a moving light.
+- **Audio songs.** Five complete audio scripts, each with an explanation of its sound.
+
+**A note on the database.** The MotionCode database in the library is the first reference and
+the basic one. It is not the most complete version, but it is enough for an AI to learn
+MotionCode from. Treat its answers as a starting point, and run any script in the app to check it.
 
 ---
 
