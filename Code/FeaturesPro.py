@@ -1,37 +1,24 @@
-"""FeaturesPro: visual styles for MotionCode.
+"""FeaturesPro: visual styles, effects and motion helpers for MotionCode.
 
-Style detail follows the Quality box in the app. Call set_quality() from the app
-when the Quality box changes (features.py does this for you).
+One module containing:
+  - Styles and helpers for video scripts (Styled, liquid, kinetic, split_flap,
+    bounce, grid, deco_frame, dimension, stroke_draw, pixel_sprite, iso_box,
+    paper_sheet, caption, mask, layer, emitter, update_all)
+  - Gradients, lights, blur and motion-blur helpers (formerly effects.py)
+  - Transforms, easing, shake, particles, trails and 3D mesh projection
+    (formerly motion_fx.py)
 
-Quality:   low -> base look only
-           medium -> 1 extra layer per styled object
-           balanced -> 2 extra layers
-           high -> 3 extra layers, smoother liquid and finer grid
+Quality follows the Quality box in the app. features.py calls set_quality().
 
-Use it from a video script:
-
+Use from a video script:
     import FeaturesPro as pro
 
     def build(scene):
-        scene.duration = 10
-        pro.Styled(scene, "Sign", "text", style="neon", text="OPEN",
-                   x=960, y=540, size=160, font="Arial", bold=True)
-        pro.liquid(scene, "Blob", cx=400, cy=600, radius=140, color="#FF8A5B")
-        pro.kinetic(scene, "Hello", "KINETIC TYPE", cx=960, cy=250, size=90)
-        pro.grid(scene, "Grid", step=60, color="#1E3A66")
+        pro.Styled(scene, "Sign", "text", style="neon", text="OPEN", x=960, y=540, size=160)
 
     def animate(scene, t):
-        scene.get("Sign").rotation_z = math.sin(t) * 3   # your own animation
-        pro.update_all(scene, t)                         # always last
-
-Styles: neon, brutal, paper, deco, holo, blueprint, isometric, handdrawn, pixel, none
-Other helpers: kinetic, split_flap, liquid, bounce, grid
-
-Properties FeaturesPro sets each frame. Do not set these yourself on the same object:
-  - Mask shapes: opacity (hidden in hide and tint modes) and backdrop_blur.
-  - Emitter particles: opacity and scale.
-  - Styled objects in the handdrawn style: x, y and rotation_z (they wobble).
-  - Styled objects in the isometric style: skew_x (fixed at -30).
+        scene.get("Sign").rotation_z = math.sin(t) * 3
+        pro.update_all(scene, t)   # always last
 """
 import colorsys
 import copy
@@ -39,29 +26,32 @@ import math
 import random
 
 import numpy as np
+from PySide6.QtCore import Qt, QPointF, QRectF
+from PySide6.QtGui import (
+    QBrush, QColor, QImage, QLinearGradient, QPen, QPolygonF, QRadialGradient,
+)
 
 import engine as _engine
-import motion_fx
-from engine import Circle, Rect, Polygon
+from engine import Circle, Rect, ImageAsset, MeshObject, Polygon
+from optimization import pixel_grid, remember, LIGHT_CACHE
 
-QUALITY = {"key": "balanced", "read": False}   # "read": a build() used a quality-dependent helper
-QUALITY_LEVELS = ("low", "medium", "balanced", "high")
 
-# Only these four styles change with Quality. Listed from least to most render cost:
-#   Pixel Art: one flat shadow, no blur (cheapest)
-#   Isometric: one blurred shadow, then a side layer
-#   Holographic: three colour-shifting layers, one blurred
-#   Neon Glow: three glow layers, the widest blur (most expensive)
-# Every other style always draws its full look.
+# ============================================================ Quality
+
+QUALITY = {"key": "balanced", "read": False}   # "read": build() used a quality-dependent helper
+QUALITY_LEVELS = ("very_low", "low", "medium", "balanced", "high", "ultra")
+
 STYLE_BUDGET = {
-    "pixel":     {"low": 0, "medium": 1, "balanced": 1, "high": 1},
-    "isometric": {"low": 0, "medium": 1, "balanced": 2, "high": 3},
-    "holo":      {"low": 0, "medium": 1, "balanced": 2, "high": 4},
-    "neon":      {"low": 0, "medium": 1, "balanced": 2, "high": 3},
+    "pixel":     {"very_low": 0, "low": 0, "medium": 1, "balanced": 1, "high": 1, "ultra": 1},
+    "isometric": {"very_low": 0, "low": 0, "medium": 1, "balanced": 2, "high": 3, "ultra": 3},
+    "holo":      {"very_low": 0, "low": 0, "medium": 1, "balanced": 2, "high": 4, "ultra": 4},
+    "neon":      {"very_low": 0, "low": 0, "medium": 1, "balanced": 2, "high": 3, "ultra": 3},
 }
-# Liquid outline detail and grid density per quality.
-LIQUID_POINTS = {"low": 16, "medium": 24, "balanced": 36, "high": 64}
-GRID_STEP_BOOST = {"low": 2.0, "medium": 1.5, "balanced": 1.0, "high": 0.67}
+LIQUID_POINTS = {"very_low": 12, "low": 16, "medium": 24, "balanced": 36, "high": 64, "ultra": 96}
+GRID_STEP_BOOST = {"very_low": 2.5, "low": 2.0, "medium": 1.5, "balanced": 1.0,
+                   "high": 0.67, "ultra": 0.5}
+DECO_RAYS = {"very_low": 6, "low": 8, "medium": 12, "balanced": 16, "high": 24, "ultra": 32}
+PAPER_GRAIN = {"very_low": 0, "low": 0, "medium": 40, "balanced": 120, "high": 240, "ultra": 400}
 PIXEL_STEP = 8
 
 
@@ -73,6 +63,36 @@ def _quality_key():
 
 def set_quality(key):
     QUALITY["key"] = key if key in QUALITY_LEVELS else "balanced"
+
+
+# ============================================================ Shared small helpers
+
+_NAMED_COLORS = {"white": "#FFFFFF", "black": "#000000", "red": "#FF0000",
+                 "green": "#00FF00", "blue": "#0000FF", "yellow": "#FFFF00",
+                 "orange": "#FFA500", "gray": "#808080", "grey": "#808080"}
+
+
+def _hex_parts(color):
+    text = str(color).strip()
+    text = _NAMED_COLORS.get(text.lower(), text).lstrip("#")
+    if len(text) == 3:
+        text = "".join(c * 2 for c in text)
+    if len(text) != 6 or any(c not in "0123456789abcdefABCDEF" for c in text):
+        raise ValueError("Colour %r is not #RRGGBB, #RGB or a basic name" % color)
+    return tuple(int(text[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def _hex01(color):
+    return tuple(v / 255.0 for v in _hex_parts(color))
+
+
+def _hex_rgb(color):
+    return _hex_parts(color)
+
+
+def hex_to_rgb(color):
+    """Colour as a numpy array of 0..1 values. features.py uses it for scene.grade."""
+    return np.array(_hex01(color))
 
 
 def _hue_hex(h):
@@ -112,10 +132,563 @@ def update_all(scene, t):
     _sort_layers(scene)
 
 
-# ------------------------------------------------------------------ styles
+# ============================================================ Gradients (was effects.py)
 
-# Layer fields: dx, dy offset; color (None = base color); filled; stroke_w;
-# blur; opacity (multiplied by the base opacity); hue (cycle colours); flicker.
+class Gradient:
+    """Colour gradient for a shape or the background.
+
+    stops:  list of (position 0..1, "#RRGGBB")
+    kind:   "linear" or "radial"
+    angle:  linear direction in degrees. 0 = left to right, 90 = top to bottom.
+    center: radial centre as fractions of the object's box.
+    radius: radial radius as a fraction of the object's larger side.
+    """
+
+    def __init__(self, stops, kind="linear", angle=90.0, center=(0.5, 0.5), radius=0.5):
+        if len(stops) < 2:
+            raise ValueError("A gradient needs at least two stops")
+        self.stops = sorted(((float(p), np.array(_hex01(c))) for p, c in stops), key=lambda s: s[0])
+        self.kind = str(kind).lower()
+        if self.kind not in ("linear", "radial"):
+            raise ValueError("kind must be 'linear' or 'radial'")
+        self.angle = float(angle)
+        self.center = (float(center[0]), float(center[1]))
+        self.radius = float(radius)
+
+    def sample(self, xs, ys, box):
+        bx, by, bw, bh = box
+        if self.kind == "radial":
+            cx = bx + self.center[0] * bw
+            cy = by + self.center[1] * bh
+            r = max(1e-6, self.radius * max(bw, bh))
+            u = np.hypot(xs - cx, ys - cy) / r
+        else:
+            a = math.radians(self.angle)
+            dx, dy = math.cos(a), math.sin(a)
+            cx, cy = bx + bw / 2.0, by + bh / 2.0
+            half = max(1e-6, (abs(dx) * bw + abs(dy) * bh) / 2.0)
+            u = ((xs - cx) * dx + (ys - cy) * dy) / (2.0 * half) + 0.5
+        u = np.clip(u, 0.0, 1.0)
+        pos = np.array([p for p, _ in self.stops])
+        cols = np.array([c for _, c in self.stops])
+        return np.stack([np.interp(u, pos, cols[:, k]) for k in range(3)], axis=-1)
+
+
+# ============================================================ Lighting (was effects.py)
+
+class Light:
+    """A soft point light in screen pixels."""
+
+    def __init__(self, x, y, radius=600.0, intensity=1.0, color="#FFFFFF"):
+        self.x, self.y = float(x), float(y)
+        self.radius = max(1.0, float(radius))
+        self.intensity = float(intensity)
+        self.color = np.array(_hex01(color))
+
+
+def light_map(xs, ys, lights, ambient=0.35):
+    """Brightness multiplier per pixel, shape (..., 3). Capped at 1.6."""
+    total = np.full(xs.shape + (3,), float(ambient))
+    for light in lights:
+        d = np.hypot(xs - light.x, ys - light.y) / light.radius
+        falloff = np.clip(1.0 - d, 0.0, 1.0) ** 2
+        total += falloff[..., None] * light.intensity * light.color
+    return np.clip(total, 0.0, 1.6)
+
+
+def lambert(normal, light_dir, ambient=0.25):
+    """Diffuse brightness for a 3D face."""
+    n = np.asarray(normal, dtype=float)
+    l = np.asarray(light_dir, dtype=float)
+    n = n / max(1e-9, np.linalg.norm(n))
+    l = l / max(1e-9, np.linalg.norm(l))
+    return float(min(1.0, ambient + (1.0 - ambient) * max(0.0, float(np.dot(n, l)))))
+
+
+# ============================================================ Blur (was effects.py)
+
+def _box_axis(arr, r, axis):
+    a = np.moveaxis(arr, axis, 0)
+    pad = np.pad(a, [(r, r)] + [(0, 0)] * (a.ndim - 1), mode="edge")
+    c = np.cumsum(pad, axis=0)
+    c = np.concatenate([np.zeros_like(c[:1]), c], axis=0)
+    k = 2 * r + 1
+    return np.moveaxis((c[k:] - c[:-k]) / k, 0, axis)
+
+
+def box_blur(img, radius):
+    r = int(round(radius))
+    if r <= 0:
+        return img
+    return _box_axis(_box_axis(img, r, 0), r, 1)
+
+
+def gaussian_blur(img, sigma):
+    """Soft blur approximated by three box passes."""
+    if sigma <= 0:
+        return img
+    r = max(1, int(round(sigma)))
+    out = img
+    for _ in range(3):
+        out = box_blur(out, r)
+    return out
+
+
+def blur_region(img, x0, y0, x1, y1, radius):
+    h, w = img.shape[:2]
+    x0, x1 = max(0, int(x0)), min(w, int(x1))
+    y0, y1 = max(0, int(y0)), min(h, int(y1))
+    if x1 <= x0 or y1 <= y0:
+        return img
+    out = img.copy()
+    out[y0:y1, x0:x1] = gaussian_blur(img[y0:y1, x0:x1], radius)
+    return out
+
+
+def circle_mask(xs, ys, cx, cy, radius, feather=2.0):
+    d = np.hypot(xs - cx, ys - cy)
+    return np.clip((radius - d) / max(feather, 1e-6) + 0.5, 0.0, 1.0)
+
+
+def backdrop_blur(img, mask, radius):
+    """Blur the background where mask is 1."""
+    blurred = gaussian_blur(img, radius)
+    m = mask[..., None]
+    return img * (1.0 - m) + blurred * m
+
+
+# ============================================================ Motion blur and stretch (was motion_fx/effects)
+
+def motion_blur_times(t, fps, shutter=0.5, samples=8):
+    """Times inside one frame for motion blur. shutter: fraction of a frame."""
+    if samples <= 1 or shutter <= 0:
+        return [max(0.0, t)]
+    span = shutter / float(fps)
+    start = t - span / 2.0
+    return [max(0.0, start + span * i / (samples - 1)) for i in range(samples)]
+
+
+def average_frames(frames):
+    acc = np.zeros(frames[0].shape, dtype=np.float32)
+    for f in frames:
+        acc += f
+    return acc / len(frames)
+
+
+def velocity_stretch(vx, vy, amount=0.02, max_stretch=1.6):
+    """Returns (rotation_z, scale_x, scale_y) that stretch a shape along its movement."""
+    speed = math.hypot(vx, vy)
+    s = min(max_stretch, 1.0 + amount * speed)
+    angle = math.degrees(math.atan2(vy, vx))
+    return angle, s, 1.0 / math.sqrt(s)
+
+
+# ============================================================ Qt conversion and gradient brushes (was effects.py)
+
+def qimage_to_array(img):
+    """Premultiplied RGBA QImage to float32 array (H, W, 4), values 0..1."""
+    img = img.convertToFormat(QImage.Format.Format_RGBA8888_Premultiplied)
+    w, h = img.width(), img.height()
+    bpl = img.bytesPerLine()
+    raw = bytes(img.constBits())
+    buf = np.frombuffer(raw, dtype=np.uint8)
+    return buf.reshape(h, bpl // 4, 4)[:, :w, :].astype(np.float32) / 255.0
+
+
+def array_to_qimage(arr):
+    """Float array (H, W, 4), premultiplied, 0..1, to a QImage."""
+    arr = np.clip(arr, 0.0, 1.0)
+    arr[..., :3] = np.minimum(arr[..., :3], arr[..., 3:4])
+    data = np.ascontiguousarray((arr * 255.0 + 0.5).astype(np.uint8))
+    h, w = data.shape[:2]
+    buf = data.tobytes()
+    img = QImage(buf, w, h, w * 4, QImage.Format.Format_RGBA8888_Premultiplied)
+    return img.copy()
+
+
+def local_extent(obj):
+    """Half-width and half-height of a shape in its own coordinates."""
+    if isinstance(obj, Circle):
+        return obj.radius, obj.radius
+    if isinstance(obj, Rect):
+        return obj.width / 2, obj.height / 2
+    if isinstance(obj, ImageAsset):
+        return obj.width / 2, obj.height / 2
+    if isinstance(obj, MeshObject):
+        return obj.size / 2, obj.size / 2
+    if isinstance(obj, Polygon) and obj.points:
+        return (max(abs(x) for x, _ in obj.points) or 1.0,
+                max(abs(y) for _, y in obj.points) or 1.0)
+    return 100.0, 100.0
+
+
+def make_gradient_brush(grad, extent):
+    """Qt brush for a Gradient. extent is (half_width, half_height) in local coordinates."""
+    hw, hh = extent
+    if grad.kind == "radial":
+        cx = (grad.center[0] * 2 - 1) * hw
+        cy = (grad.center[1] * 2 - 1) * hh
+        r = max(1.0, grad.radius * max(2 * hw, 2 * hh))
+        g = QRadialGradient(QPointF(cx, cy), r)
+    else:
+        a = math.radians(grad.angle)
+        dx, dy = math.cos(a), math.sin(a)
+        half = max(1e-6, (abs(dx) * 2 * hw + abs(dy) * 2 * hh) / 2.0)
+        g = QLinearGradient(QPointF(-dx * half, -dy * half), QPointF(dx * half, dy * half))
+    for pos, rgb in grad.stops:
+        g.setColorAt(float(pos), QColor.fromRgbF(float(rgb[0]), float(rgb[1]), float(rgb[2]), 1.0))
+    return QBrush(g)
+
+
+def apply_lights(arr, scene, rect, sx, sy):
+    """Multiply the region's colour by the light map, cached per light setup."""
+    xx, yy = pixel_grid(rect, sx, sy)
+    light_key = (rect.x(), rect.y(), rect.width(), rect.height(), sx, sy, float(scene.ambient),
+                 tuple((float(l.x), float(l.y), float(l.radius), float(l.intensity),
+                        tuple(float(c) for c in l.color)) for l in scene.lights))
+    bright = LIGHT_CACHE.get(light_key)
+    if bright is None:
+        bright = remember(LIGHT_CACHE, light_key,
+                          light_map(xx, yy, scene.lights, scene.ambient).astype(np.float32), 6)
+    arr[..., :3] = arr[..., :3] * bright
+    arr[..., :3] = np.minimum(arr[..., :3], arr[..., 3:4])
+    return arr
+
+
+# ============================================================ Transforms and meshes (was motion_fx.py)
+
+def apply_transform(p, obj):
+    """Position, rotate, stretch and skew a 2D object before it is drawn."""
+    p.translate(obj.x, obj.y)
+    p.rotate(obj.rotation_z)
+    sx = getattr(obj, "scale_x", 1.0)
+    sy = getattr(obj, "scale_y", 1.0)
+    p.scale(obj.scale * sx, obj.scale * sy)
+    skew = getattr(obj, "skew_x", 0.0)
+    if skew:
+        p.shear(math.tan(math.radians(skew)), 0.0)
+
+
+def clamp01(k):
+    return max(0.0, min(1.0, k))
+
+
+def ease_out_cubic(k):
+    k = clamp01(k)
+    return 1.0 - (1.0 - k) ** 3
+
+
+def ease_in_out_cubic(k):
+    k = clamp01(k)
+    return 4 * k ** 3 if k < 0.5 else 1 - ((-2 * k + 2) ** 3) / 2
+
+
+def ease_out_back(k, overshoot=1.70158):
+    k = clamp01(k)
+    c3 = overshoot + 1
+    return 1 + c3 * (k - 1) ** 3 + overshoot * (k - 1) ** 2
+
+
+def ease_out_elastic(k):
+    k = clamp01(k)
+    if k == 0 or k == 1:
+        return k
+    return 2 ** (-10 * k) * math.sin((k * 10 - 0.75) * (2 * math.pi) / 3) + 1
+
+
+def ease_out_bounce(k):
+    k = clamp01(k)
+    n1, d1 = 7.5625, 2.75
+    if k < 1 / d1:
+        return n1 * k * k
+    if k < 2 / d1:
+        k -= 1.5 / d1
+        return n1 * k * k + 0.75
+    if k < 2.5 / d1:
+        k -= 2.25 / d1
+        return n1 * k * k + 0.9375
+    k -= 2.625 / d1
+    return n1 * k * k + 0.984375
+
+
+def progress(t, start, duration, ease=ease_out_cubic):
+    """0..1 progress of an eased move that begins at start and lasts duration seconds."""
+    if duration <= 0:
+        return 1.0 if t >= start else 0.0
+    return ease((t - start) / duration)
+
+
+def spring(t, start, freq=2.5, damping=3.5):
+    if t < start:
+        return 0.0
+    x = t - start
+    return math.exp(-damping * x) * math.cos(2 * math.pi * freq * x)
+
+
+def squash_stretch(t, start, amount=0.25, freq=2.5, damping=3.5):
+    s = spring(t, start, freq, damping) * amount
+    return 1.0 - s, 1.0 + s
+
+
+def shake(t, amplitude=10.0, frequency=14.0, decay=4.0, start=0.0):
+    if t < start:
+        return 0.0, 0.0
+    x = t - start
+    env = math.exp(-decay * x) * amplitude
+    return env * math.sin(2 * math.pi * frequency * x), env * math.cos(2 * math.pi * frequency * 1.31 * x)
+
+
+def wobble(t, amplitude=6.0, frequency=1.2, start=0.0):
+    if t < start:
+        return 0.0
+    return amplitude * math.sin(2 * math.pi * frequency * (t - start))
+
+
+def flash(t, start, duration=0.25):
+    if t < start or t > start + duration:
+        return 0.0
+    return 1.0 - (t - start) / duration
+
+
+def typed(text, t, start, chars_per_second=18.0):
+    if t < start:
+        return ""
+    count = int((t - start) * chars_per_second)
+    return text[:max(0, min(len(text), count))]
+
+
+def word_reveal(words, t, start, per_word=0.12):
+    out = []
+    for i, word in enumerate(words):
+        local = (t - (start + i * per_word)) / 0.25
+        out.append((word, ease_out_cubic(local)))
+    return out
+
+
+class Burst:
+    """Particle burst from one point. Call build(scene) once, then update(scene, t) each frame."""
+
+    def __init__(self, prefix, x, y, t0, count=24, speed=320.0, life=1.0,
+                 color="#FFFFFF", size=6.0, gravity=500.0, seed=1, stroke=2):
+        self.prefix = prefix
+        self.x, self.y = float(x), float(y)
+        self.t0 = float(t0)
+        self.life = float(life)
+        self.gravity = float(gravity)
+        self.color = color
+        self.size = float(size)
+        self.stroke = float(stroke)
+        rng = random.Random(seed)
+        self.particles = []
+        for i in range(count):
+            angle = rng.uniform(0, 2 * math.pi)
+            v = speed * rng.uniform(0.5, 1.0)
+            self.particles.append((i, math.cos(angle) * v, math.sin(angle) * v))
+        self.names = ["%s_%d" % (prefix, i) for i, _, _ in self.particles]
+
+    def build(self, scene):
+        for name in self.names:
+            scene.add_circle(name, x=self.x, y=self.y, radius=self.size,
+                             color=self.color, stroke=self.stroke, filled=True)
+
+    def update(self, scene, t):
+        age = t - self.t0
+        for (i, vx, vy), name in zip(self.particles, self.names):
+            obj = scene.get_optional(name)
+            if obj is None:
+                continue
+            if age < 0 or age > self.life:
+                obj.opacity = 0.0
+                continue
+            obj.x = self.x + vx * age
+            obj.y = self.y + vy * age + 0.5 * self.gravity * age * age
+            obj.opacity = clamp01(1.0 - age / self.life)
+            obj.scale = max(0.1, 1.0 - age / self.life)
+
+
+class Trail:
+    """Ghost copies that follow a moving point with a delay. pos_fn(t) -> (x, y)."""
+
+    def __init__(self, prefix, pos_fn, count=8, delay=0.04, fade=0.8,
+                 color="#35B9FF", radius=10.0, stroke=2):
+        self.prefix = prefix
+        self.pos_fn = pos_fn
+        self.count = int(count)
+        self.delay = float(delay)
+        self.fade = float(fade)
+        self.color = color
+        self.radius = float(radius)
+        self.stroke = float(stroke)
+        self.names = ["%s_%d" % (prefix, i) for i in range(self.count)]
+
+    def build(self, scene):
+        for name in self.names:
+            scene.add_circle(name, x=0, y=0, radius=self.radius, color=self.color,
+                             stroke=self.stroke, filled=True)
+
+    def update(self, scene, t):
+        for i, name in enumerate(self.names):
+            obj = scene.get_optional(name)
+            if obj is None:
+                continue
+            x, y = self.pos_fn(max(0.0, t - i * self.delay))
+            obj.x, obj.y = x, y
+            obj.opacity = clamp01(self.fade ** i)
+            obj.scale = max(0.2, 1.0 - 0.08 * i)
+
+
+def mesh_data(obj):
+    n = obj.segments
+    s = obj.size / 2
+    verts, edges = [], []
+    if obj.shape == "cube":
+        verts = [(-s,-s,-s),(s,-s,-s),(s,s,-s),(-s,s,-s),(-s,-s,s),(s,-s,s),(s,s,s),(-s,s,s)]
+        edges = [(0,1),(1,2),(2,3),(3,0),(4,5),(5,6),(6,7),(7,4),(0,4),(1,5),(2,6),(3,7)]
+    elif obj.shape == "pyramid":
+        verts = [(-s,s,-s),(s,s,-s),(s,s,s),(-s,s,s),(0,-s,0)]
+        edges = [(0,1),(1,2),(2,3),(3,0),(0,4),(1,4),(2,4),(3,4)]
+    elif obj.shape in ("cone", "cylinder"):
+        h = obj.height / 2
+        for yy in (-h, h):
+            for i in range(n):
+                a = 2 * math.pi * i / n
+                verts.append((obj.radius * math.cos(a), yy, obj.radius * math.sin(a)))
+        for i in range(n):
+            j = (i + 1) % n
+            edges += [(i,j),(i+n,j+n),(i,i+n)]
+        if obj.shape == "cone":
+            verts.append((0,-h,0)); tip = len(verts)-1
+            edges = [(i,(i+1)%n) for i in range(n)] + [(i,tip) for i in range(n)]
+    elif obj.shape == "sphere":
+        for r in range(1, obj.rings):
+            phi = math.pi * r / obj.rings
+            start = len(verts)
+            for i in range(n):
+                theta = 2 * math.pi * i / n
+                verts.append((s*math.sin(phi)*math.cos(theta), s*math.cos(phi), s*math.sin(phi)*math.sin(theta)))
+            for i in range(n): edges.append((start+i, start+(i+1)%n))
+        for i in range(n):
+            for r in range(obj.rings-1): edges.append((r*n+i, (r+1)*n+i))
+    elif obj.shape == "torus":
+        major, minor = obj.size * .36, obj.size * .12
+        m = n
+        rr = max(6, obj.rings)
+        for i in range(m):
+            u = 2*math.pi*i/m
+            for j in range(rr):
+                v = 2*math.pi*j/rr
+                verts.append(((major+minor*math.cos(v))*math.cos(u), minor*math.sin(v), (major+minor*math.cos(v))*math.sin(u)))
+        for i in range(m):
+            for j in range(rr):
+                a=i*rr+j
+                edges += [(a,i*rr+(j+1)%rr),(a,((i+1)%m)*rr+j)]
+    elif obj.shape == "plane":
+        verts=[(-s,0,-s),(s,0,-s),(s,0,s),(-s,0,s)]
+        edges=[(0,1),(1,2),(2,3),(3,0),(0,2),(1,3)]
+    elif obj.shape == "custom":
+        verts = list(obj.vertices)
+        edges = list(obj.edges)
+    return verts, edges
+
+
+def _rotate_vertices(obj, verts):
+    ax = math.radians(obj.rotation_x); ay = math.radians(obj.rotation_y); az = math.radians(obj.rotation_z)
+    out = []
+    for x, y, z in verts:
+        x *= obj.scale; y *= obj.scale; z *= obj.scale
+        y, z = y*math.cos(ax)-z*math.sin(ax), y*math.sin(ax)+z*math.cos(ax)
+        x, z = x*math.cos(ay)+z*math.sin(ay), -x*math.sin(ay)+z*math.cos(ay)
+        x, y = x*math.cos(az)-y*math.sin(az), x*math.sin(az)+y*math.cos(az)
+        out.append((x, y, z))
+    return out
+
+
+def project_mesh(obj, scene):
+    verts, edges = mesh_data(obj)
+    rot = _rotate_vertices(obj, verts)
+    camera_z = max(100.0, float(getattr(scene, "camera_fov", 700)))
+    projected = []
+    for x, y, z in rot:
+        depth = max(30.0, camera_z + z + obj.z)
+        factor = camera_z / depth
+        projected.append(QPointF((x-scene.camera_x)*factor+obj.x, (y-scene.camera_y)*factor+obj.y))
+    return projected, edges
+
+
+def draw_filled_mesh(p, obj, scene):
+    """Solid flat-shaded draw with no outline. Faces are sorted farthest-first."""
+    rot = _rotate_vertices(obj, list(obj.vertices))
+    camera_z = max(100.0, float(getattr(scene, "camera_fov", 700)))
+    screen = []
+    for x, y, z in rot:
+        depth = max(30.0, camera_z + z + obj.z)
+        f = camera_z / depth
+        screen.append(QPointF((x - scene.camera_x) * f + obj.x, (y - scene.camera_y) * f + obj.y))
+
+    lx, ly, lz = -0.35, -0.55, -0.76
+    ll = math.sqrt(lx*lx + ly*ly + lz*lz)
+    lx, ly, lz = lx/ll, ly/ll, lz/ll
+
+    base = QColor(obj.color)
+    items = []
+    for face in obj.faces:
+        if len(face) < 3 or any(i < 0 or i >= len(rot) for i in face):
+            continue
+        ax_, ay_, az_ = rot[face[0]]
+        bx, by, bz = rot[face[1]]
+        cx_, cy_, cz_ = rot[face[2]]
+        ux, uy, uz = bx-ax_, by-ay_, bz-az_
+        vx, vy, vz = cx_-ax_, cy_-ay_, cz_-az_
+        nx, ny, nz = uy*vz-uz*vy, uz*vx-ux*vz, ux*vy-uy*vx
+        nl = math.sqrt(nx*nx + ny*ny + nz*nz) or 1.0
+        dot = abs((nx*lx + ny*ly + nz*lz) / nl)
+        shade = 0.6 + 0.4 * dot
+        zavg = sum(rot[i][2] for i in face) / len(face)
+        items.append((zavg, face, shade))
+
+    items.sort(key=lambda it: -it[0])
+    p.setPen(Qt.PenStyle.NoPen)
+    for _, face, shade in items:
+        col = QColor(int(base.red()*shade), int(base.green()*shade), int(base.blue()*shade))
+        p.setBrush(col)
+        p.drawPolygon(QPolygonF([screen[i] for i in face]))
+
+
+def resolve_pose(obj, scene, _depth=0):
+    """Copy of obj with its parent's transform applied. Objects without a parent are returned unchanged."""
+    parent = getattr(obj, "parent", None)
+    if parent is None:
+        return obj
+    if _depth > 32:
+        raise ValueError("Parent chain is too deep or loops back on itself")
+    if isinstance(parent, str):
+        parent = scene.get(parent)
+    pw = resolve_pose(parent, scene, _depth + 1)
+    s = float(pw.scale)
+    a = math.radians(pw.rotation_z)
+    lx, ly = float(obj.x), float(obj.y)
+    out = copy.copy(obj)
+    out.x = pw.x + (lx * math.cos(a) - ly * math.sin(a)) * s
+    out.y = pw.y + (lx * math.sin(a) + ly * math.cos(a)) * s
+    out.rotation_z = pw.rotation_z + float(obj.rotation_z)
+    out.scale = float(obj.scale) * s
+    out.opacity = float(obj.opacity) * float(pw.opacity)
+    out.parent = None
+    return out
+
+
+# ============================================================ Styles
+
+_COPY_FIELDS = ("x", "y", "rotation_z", "scale", "scale_x", "scale_y", "skew_x")
+_ADDERS = {
+    "circle": "add_circle",
+    "rect": "add_rect",
+    "rounded_rect": "add_rounded_rect",
+    "ellipse": "add_ellipse",
+    "star": "add_star",
+    "text": "add_text",
+}
+
 STYLES = {
     "none": {"layers": []},
     "neon": {
@@ -126,7 +699,6 @@ STYLES = {
             {"color": "#FF2E9A", "stroke_w": 14, "blur": 30, "opacity": 0.35},
         ],
     },
-    # P2: the old second shadow layer had opacity 0 and never drew, so it is removed.
     "brutal": {
         "color": "#FFE14D", "filled": True, "stroke_w": 7,
         "layers": [
@@ -186,20 +758,8 @@ STYLES = {
 }
 
 
-_ADDERS = {
-    "circle": "add_circle",
-    "rect": "add_rect",
-    "rounded_rect": "add_rounded_rect",
-    "ellipse": "add_ellipse",
-    "star": "add_star",
-    "text": "add_text",
-}
-_COPY_FIELDS = ("x", "y", "rotation_z", "scale", "scale_x", "scale_y", "skew_x")
-
-
 class Styled:
-    """A shape or text with a visual style. Its style layers are created behind it.
-    Give the base object its normal properties; the style is added automatically."""
+    """A shape or text with a visual style. Style layers are created behind it."""
 
     def __init__(self, scene, name, shape, style="none", text=None, **kw):
         if style not in STYLES:
@@ -212,7 +772,6 @@ class Styled:
         self.spec = STYLES[style]
         self.layers = []
         self.layer_specs = []
-        # P1: the wobble applied on the last frame, removed before the next one is added.
         self._last = (0.0, 0.0, 0.0)
 
         base_kw = dict(kw)
@@ -225,9 +784,8 @@ class Styled:
         if style == "isometric":
             base_kw.setdefault("skew_x", -30.0)
         if style == "pixel" and "color" in base_kw:
-            base_kw["color"] = quantize_color(base_kw["color"])   # limited palette
+            base_kw["color"] = quantize_color(base_kw["color"])
 
-        # Layers are added first so they draw behind the base object.
         if style in STYLE_BUDGET:
             count = STYLE_BUDGET[style][_quality_key()]
         else:
@@ -267,7 +825,6 @@ class Styled:
             jx = 1.6 * math.sin(t * 23.0)
             jy = 1.6 * math.sin(t * 29.0 + 1.0)
             jr = 0.8 * math.sin(t * 7.0)
-            # Move by the change since the last frame only, so the wobble never accumulates.
             base.x += jx - self._last[0]
             base.y += jy - self._last[1]
             base.rotation_z += jr - self._last[2]
@@ -278,14 +835,10 @@ class Styled:
         elif style == "isometric":
             base.skew_x = -30.0
         elif style == "holo":
-            base.skew_x = 14.0 * math.sin(t * 0.9)   # the angle changes the reflected colour
-            try:
-                import effects as ex
-                stops = [(0.0, _hue_hex(t * 0.12)), (0.5, _hue_hex(t * 0.12 + 0.33)),
-                         (1.0, _hue_hex(t * 0.12 + 0.66))]
-                base.gradient = ex.Gradient(stops, kind="linear", angle=(t * 35.0) % 360.0)
-            except Exception:
-                pass   # without the effects module the holo keeps its plain fill
+            base.skew_x = 14.0 * math.sin(t * 0.9)
+            stops = [(0.0, _hue_hex(t * 0.12)), (0.5, _hue_hex(t * 0.12 + 0.33)),
+                     (1.0, _hue_hex(t * 0.12 + 0.66))]
+            base.gradient = Gradient(stops, kind="linear", angle=(t * 35.0) % 360.0)
 
         for i, (lname, layer) in enumerate(zip(self.layers, self.layer_specs)):
             obj = scene.get(lname)
@@ -299,7 +852,7 @@ class Styled:
             if layer.get("flicker"):
                 opacity *= 0.85 + 0.15 * math.sin(t * 17.0 + i)
             if layer.get("sweep"):
-                obj.x += 160.0 * math.sin(t * 0.9 + i)   # reflective highlight that sweeps across
+                obj.x += 160.0 * math.sin(t * 0.9 + i)
             if layer.get("hue"):
                 hue = (t * 0.15 + i * 0.33) % 1.0
                 r, g, b = colorsys.hsv_to_rgb(hue, 0.7, 1.0)
@@ -307,10 +860,10 @@ class Styled:
             obj.opacity = _clamp(opacity)
 
 
-# ------------------------------------------------------------- liquid morph
+# ============================================================ Liquid
 
 class Liquid:
-    """A soft blob whose outline keeps moving. Detail follows the Quality setting."""
+    """A soft blob whose outline keeps moving. Detail follows Quality."""
 
     def __init__(self, scene, name, cx, cy, radius, color="#FFFFFF", wobble=0.12, speed=1.0):
         self.name = name
@@ -341,7 +894,7 @@ def liquid(scene, name, cx, cy, radius, color="#FFFFFF", wobble=0.12, speed=1.0)
     return Liquid(scene, name, cx, cy, radius, color, wobble, speed)
 
 
-# ------------------------------------------------------------ kinetic type
+# ============================================================ Kinetic type
 
 def _char_cells(scene, text, size, font, bold):
     widths = []
@@ -360,7 +913,6 @@ class Kinetic:
         self.text = text
         self.start = float(start)
         self.stagger = float(stagger)
-        # P5: a zero duration would divide by zero on the first frame.
         self.duration = max(1e-3, float(duration))
         widths = _char_cells(scene, text, size, font, bold)
         x = float(cx) - sum(widths) / 2.0
@@ -388,17 +940,16 @@ def kinetic(scene, name, text, cx, cy, size=90, color="#FFFFFF", font="Arial", b
     return Kinetic(scene, name, text, cx, cy, size, color, font, bold, start, stagger, duration)
 
 
-# --------------------------------------------------------------- split-flap
+# ============================================================ Split-flap
 
 class SplitFlap:
-    """Departure-board letters. Each change flips the letters one after another.
-    states: list of (time_seconds, text). Texts should be the same length."""
+    """Departure-board letters. states: list of (time_seconds, text), same length texts."""
 
     def __init__(self, scene, name, states, cx, cy, size=96, color="#FFD166",
                  font="Consolas", bold=True, flip=0.32, stagger=0.05):
         self.name = name
         self.states = sorted((float(t), str(s)) for t, s in states)
-        self.flip = max(1e-3, float(flip))      # P5: guard against division by zero
+        self.flip = max(1e-3, float(flip))
         self.stagger = float(stagger)
         width_len = max(len(s) for _, s in self.states)
         cell = scene.measure_text("M", size=size, font=font, bold=bold)[0] * 1.05
@@ -442,14 +993,11 @@ def split_flap(scene, name, states, cx, cy, size=96, color="#FFD166", font="Cons
     return SplitFlap(scene, name, states, cx, cy, size, color, font, bold, flip, stagger)
 
 
-# ------------------------------------------------------------------ bounce
+# ============================================================ Bounce
 
 class Bounce:
-    """An object dropped from the top that bounces on a floor. Physics is simulated
-    from the start time, so scrubbing and export give the same result.
-
-    The simulation is stored step by step. Going back in time reads the stored
-    steps, so motion-blur samples just before the current time cost nothing extra."""
+    """Object dropped from the top that bounces on a floor. Physics is stored step by step,
+    so scrubbing and export give the same result."""
 
     _DT = 1.0 / 240.0
 
@@ -462,7 +1010,6 @@ class Bounce:
         self.start = float(start)
         self.gravity = float(gravity)
         self.restitution = float(restitution)
-        # states[n] = (y, velocity) after n steps. Filled in as time moves forward.
         self._states = [(self.drop_y, 0.0)]
         adder = getattr(scene, _ADDERS[shape])
         if shape == "text":
@@ -473,7 +1020,7 @@ class Bounce:
 
     def _step(self, y, v):
         if v == 0.0 and y >= self.rest_y:
-            return y, 0.0                       # settled on the floor: no jitter
+            return y, 0.0
         v += self.gravity * self._DT
         y += v * self._DT
         if y >= self.rest_y:
@@ -503,10 +1050,10 @@ def bounce(scene, name, shape, x, drop_y, floor_y, radius=40.0, start=0.0,
                   restitution, **kw)
 
 
-# ------------------------------------------------------------------- grid
+# ============================================================ Grid
 
 def grid(scene, name, step=60, color="#1E3A66", width=1, area=(0, 0, 1920, 1080)):
-    """Blueprint grid. Density follows the Quality setting: finer grids at higher quality."""
+    """Blueprint grid. Finer at higher quality."""
     x0, y0, x1, y1 = area
     step = max(8, int(step * GRID_STEP_BOOST[_quality_key()]))
     count = 0
@@ -526,15 +1073,10 @@ def grid(scene, name, step=60, color="#1E3A66", width=1, area=(0, 0, 1920, 1080)
     return count + row
 
 
-# =========================================================== Art Deco ornaments
-
-# Sunburst rays per quality level (symmetry and ornament density).
-DECO_RAYS = {"low": 8, "medium": 12, "balanced": 16, "high": 24}
-
+# ============================================================ Art Deco
 
 def deco_frame(scene, name, cx, cy, width, height, color="#D4AF37", dark="#1A1206", stroke=4):
-    """Symmetric Art Deco frame: stepped corners, a dark inner line, and a sunburst behind it.
-    Everything is built from the centre, so the design is symmetric by construction."""
+    """Symmetric Art Deco frame with stepped corners and a sunburst behind it."""
     hw, hh = width / 2.0, height / 2.0
     s = min(width, height) * 0.04
     rays = DECO_RAYS[_quality_key()]
@@ -567,13 +1109,11 @@ def deco_frame(scene, name, cx, cy, width, height, color="#D4AF37", dark="#1A120
                        color=dark, stroke=max(2, stroke - 1))
 
 
-# =========================================================== Blueprint dimensions
+# ============================================================ Dimension lines
 
 def dimension(scene, name, x1, y1, x2, y2, offset=40.0, color="#7FD1FF", size=24,
               label=None, font="Consolas"):
-    """A dimension line with end ticks and a label, for horizontal or vertical edges.
-    The line sits offset pixels away from the measured edge, and the label sits on the
-    outside of the dimension line, away from the object."""
+    """Dimension line with end ticks and a label, for horizontal or vertical edges."""
     horizontal = abs(y2 - y1) < abs(x2 - x1)
     if horizontal:
         ya = min(y1, y2) - offset if offset >= 0 else max(y1, y2) - offset
@@ -585,7 +1125,6 @@ def dimension(scene, name, x1, y1, x2, y2, offset=40.0, color="#7FD1FF", size=24
         for i, x in enumerate((xa, xb)):
             scene.add_line("%s tick %d" % (name, i), x=x - 7, y=ya + 7, x2=14, y2=-14,
                            color=color, stroke=2)
-        # P8: put the label on the side of the line that faces away from the object.
         side = -1.0 if ya < min(y1, y2) else 1.0
         mx, my = (xa + xb) / 2.0, ya + side * size * 0.6
     else:
@@ -606,11 +1145,10 @@ def dimension(scene, name, x1, y1, x2, y2, offset=40.0, color="#7FD1FF", size=24
     return length
 
 
-# =============================================================== Hand-drawn strokes
+# ============================================================ Stroke draw
 
 class StrokeDraw:
-    """Draws an outline progressively, like a pen moving along it. Points are absolute
-    screen coordinates. Use closed=True to draw back to the first point."""
+    """Draws an outline progressively, like a pen moving along it."""
 
     def __init__(self, scene, name, points, t_start, duration, color="#FFFFFF", stroke=3,
                  closed=True):
@@ -650,7 +1188,7 @@ def stroke_draw(scene, name, points, t_start, duration, color="#FFFFFF", stroke=
     return StrokeDraw(scene, name, points, t_start, duration, color, stroke, closed)
 
 
-# ============================================================ Pixel Art palettes
+# ============================================================ Pixel art
 
 PIXEL_PALETTES = {
     "retro": ["#0B0B1E", "#2D1B4E", "#7B2D8E", "#E0457B", "#F9A03F", "#FFF6D5"],
@@ -665,22 +1203,15 @@ def set_pixel_palette(name):
         ACTIVE_PALETTE["name"] = name
 
 
-def _hex_rgb(h):
-    h = h.lstrip("#")
-    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
-
-
 def quantize_color(color, palette=None):
-    """Snap a colour to the nearest colour in the palette (limited palette)."""
+    """Snap a colour to the nearest colour in the palette."""
     colors = PIXEL_PALETTES[palette or ACTIVE_PALETTE["name"]]
     r, g, b = _hex_rgb(color)
-    best = min(colors, key=lambda c: sum((x - y) ** 2 for x, y in zip(_hex_rgb(c), (r, g, b))))
-    return best
+    return min(colors, key=lambda c: sum((x - y) ** 2 for x, y in zip(_hex_rgb(c), (r, g, b))))
 
 
 def pixel_sprite(scene, name, bitmap, cx, cy, cell=8, palette=None, shadow=True):
-    """Build a sprite from text rows. '.' is empty; digits 0-5 pick palette colours.
-    Each filled cell is one rectangle, so the sprite is made of pixel clusters."""
+    """Sprite from text rows. '.' is empty; digits 0-5 pick palette colours."""
     colors = PIXEL_PALETTES[palette or ACTIVE_PALETTE["name"]]
     rows = len(bitmap)
     cols = max(len(r) for r in bitmap)
@@ -710,15 +1241,11 @@ def pixel_sprite(scene, name, bitmap, cx, cy, cell=8, palette=None, shadow=True)
     return count
 
 
-# ============================================================== Isometric box
+# ============================================================ Isometric box
 
 def iso_box(scene, name, cx, cy, size=160.0, depth=120.0, top="#8FDCFF",
             left="#35B9FF", right="#1B7FB0"):
-    """A true isometric box: three visible faces (top, left, right) at 30 degrees.
-    Shading makes the faces read as 3D. Returns the three face names.
-
-    P3: each face sits at (cx, cy) with points relative to that centre, so effects such as
-    blur or light position the face correctly."""
+    """True isometric box with top, left and right faces. Returns the three face names."""
     s = size / 2.0
     c = math.cos(math.radians(30))
     sn = 0.5
@@ -741,17 +1268,10 @@ def iso_box(scene, name, cx, cy, size=160.0, depth=120.0, top="#8FDCFF",
     return names
 
 
-# ============================================================ Paper cutout sheet
-
-PAPER_GRAIN = {"low": 0, "medium": 40, "balanced": 120, "high": 240}
-
+# ============================================================ Paper sheet
 
 def paper_sheet(scene, name, cx, cy, w, h, color="#FFF8EC", seed=3):
-    """A cut-paper sheet: irregular cut edges, a soft drop shadow, and paper grain.
-    Grain density follows the Quality setting.
-
-    P4: the cut edge is computed once. The shadow is the same edge shifted down and right,
-    so the two shapes match."""
+    """Cut-paper sheet with jagged edges, a soft drop shadow and paper grain."""
     rnd = random.Random(seed)
 
     def jagged_rect(hw, hh):
@@ -788,10 +1308,10 @@ def paper_sheet(scene, name, cx, cy, w, h, color="#FFF8EC", seed=3):
     return name
 
 
-# ============================================================= Captions
+# ============================================================ Caption
 
 class Caption:
-    """A short explanation that fades and rises in, holds, then fades out."""
+    """Short text that fades and rises in, holds, then fades out."""
 
     def __init__(self, scene, name, text, cx, y, start, end, size=34, color="#9FB4FF"):
         self.name = name
@@ -816,8 +1336,7 @@ def caption(scene, name, text, cx, y, start, end, size=34, color="#9FB4FF"):
 # ============================================================ Self-test
 
 def selftest(scene, duration, fps=30):
-    """Run every FeaturesPro object through every frame. Returns the first problem, or None.
-    Use it from a test script to catch errors before exporting."""
+    """Run every FeaturesPro object through every frame. Returns the first problem, or None."""
     t = 0.0
     step = 1.0 / fps
     while t <= duration + 1e-9:
@@ -829,32 +1348,20 @@ def selftest(scene, duration, fps=30):
     return None
 
 
-# ================================================================= Masks
+# ============================================================ Masks
 
 MASK_MODES = ("hide", "blur", "tint")
-BLUR_MAX_PX = 60.0       # blur mode: strength 1.0 = this many pixels of blur
-
-
-def _hex01(color):
-    h = color.lstrip("#")
-    return tuple(int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+BLUR_MAX_PX = 60.0
 
 
 class Mask:
-    """Turns an existing 2D shape into a mask. Any filled circle, rect or polygon works,
-    including custom points and star shapes. One mask per shape.
+    """Turns an existing filled circle, rect or polygon into a mask.
 
-    mode:
-      "hide"  targets are invisible inside the shape
-      "blur"  the shape blurs whatever is under it (targets are not used)
-      "tint"  targets inside the shape take on `color`
-    targets:  list of object names, or None for every object drawn below the shape
-    strength: 0..1. hide = how much is hidden, tint = how much colour, blur = blur amount.
-              Read from the shape's mask_strength attribute each frame, so it can be keyframed.
-    color:    tint colour, "#RRGGBB"
-
-    The mask shape's opacity is set by the mask every frame (0 in hide and tint modes,
-    1 in blur mode). Do not set it yourself."""
+    mode:  "hide" (targets invisible inside), "blur" (blurs what is under it),
+           "tint" (targets inside take on color)
+    targets: list of object names, or None for everything drawn below the shape
+    strength: 0..1, read from the shape's mask_strength attribute each frame
+    """
 
     def __init__(self, scene, shape_name, mode="hide", targets=None, strength=1.0, color="#FFFFFF",
                  feather=0.0):
@@ -874,7 +1381,7 @@ class Mask:
         shape.mask_strength = float(strength)
         shape.mask_color = str(color)
         shape.mask_blur_only = (mode == "blur")
-        shape.mask_feather = max(0.0, float(feather))   # soft edge in pixels; 0 = hard edge
+        shape.mask_feather = max(0.0, float(feather))
         scene._pro_masks = getattr(scene, "_pro_masks", []) + [self]
         _register(scene, self)
 
@@ -883,10 +1390,10 @@ class Mask:
         strength = max(0.0, min(1.0, float(shape.mask_strength)))
         shape.mask_blur_only = (self.mode == "blur")
         if self.mode == "blur":
-            shape.opacity = 1.0                       # drawn only as a blur, see draw_one
+            shape.opacity = 1.0
             shape.backdrop_blur = strength * BLUR_MAX_PX
         else:
-            shape.opacity = 0.0                       # the shape itself is never drawn
+            shape.opacity = 0.0
             shape.backdrop_blur = 0.0
 
 
@@ -910,8 +1417,7 @@ def coverage_copy(obj):
 
 
 def composite_color_mask(arr, cover, strength, mode, color):
-    """Apply a hide or tint mask to a premultiplied RGBA layer.
-    cover: (H, W, 1) coverage of the mask shape over the layer."""
+    """Apply a hide or tint mask to a premultiplied RGBA layer."""
     m = np.clip(cover * float(strength), 0.0, 1.0)
     if mode == "hide":
         return arr * (1.0 - m)
@@ -962,7 +1468,6 @@ def _opaque_occluder(o):
 
 
 def _covers(occ, box):
-    """True if the solid occluder completely contains the box."""
     x0, y0, x1, y1 = box
     sx, sy = _shape_scale(occ)
     if isinstance(occ, Rect):
@@ -975,9 +1480,7 @@ def _covers(occ, box):
 
 
 def _hidden_names(scene, resolved, hide_names):
-    """Names of objects completely covered by a solid object drawn later.
-    Those objects are skipped entirely. Occluders that a hide mask can make
-    transparent are never used, because the target would show through them."""
+    """Names of objects completely covered by a solid object drawn later."""
     objs = [resolved[o.name] for o in scene.objects]
     hidden = set()
     for i, o in enumerate(objs):
@@ -1001,7 +1504,7 @@ class FrameContext:
 
     def __init__(self, scene):
         self.order = {o.name: i for i, o in enumerate(scene.objects)}
-        self.resolved = {o.name: motion_fx.resolve_pose(o, scene) for o in scene.objects}
+        self.resolved = {o.name: resolve_pose(o, scene) for o in scene.objects}
         self.masks = []
         has_blur = False
         hide_names = set()
@@ -1010,7 +1513,7 @@ class FrameContext:
             if shape is None:
                 continue
             if m.mode == "blur":
-                has_blur = True          # blur masks can smear hidden pixels, so occlusion is off
+                has_blur = True
                 continue
             strength = max(0.0, min(1.0, float(shape.mask_strength)))
             if strength <= 0:
@@ -1027,7 +1530,7 @@ class FrameContext:
         self.hidden = set() if has_blur else _hidden_names(scene, self.resolved, hide_names)
 
     def for_object(self, obj):
-        """Colour masks (cover, strength, mode, color) that apply to this object."""
+        """Colour masks (cover, strength, mode, color, feather) that apply to this object."""
         if getattr(obj, "is_mask", False):
             return []
         out = []
@@ -1043,16 +1546,11 @@ class FrameContext:
         return out
 
 
-# ============================================================= Layer motion
+# ============================================================ Layer motion
 
 class LayerMotion:
     """Moves an object up or down the draw order over time.
-
-    keys: [(time, layer), ...]. layer is an absolute stack position: 0 is the back.
-    Between keys the value eases with `ease`, which takes a name ("linear",
-    "ease_in", "ease_out", "ease_in_out"), a curve() from engine.py, or any function
-    from 0..1 to 0..1. The object swaps position when the eased value crosses a whole
-    number, so the easing sets the timing of the swap."""
+    keys: [(time, layer), ...] where layer 0 is the back of the stack."""
 
     def __init__(self, scene, name, keys, ease="ease_in_out"):
         if scene.get_optional(name) is None:
@@ -1087,11 +1585,8 @@ def layer(scene, name, keys, ease="ease_in_out"):
 
 
 def _sort_layers(scene):
-    """Reorder scene.objects. Unlayered objects keep their build order, and layered
-    objects are inserted at their stack position. Deterministic, so scrubbing works.
-
-    P10: objects added after the first frame get a build position at the end, so they
-    are not ignored when the order is worked out."""
+    """Reorder scene.objects. Unlayered objects keep build order; layered objects go to
+    their stack position. Deterministic, so scrubbing works."""
     values = getattr(scene, "_pro_layer_values", None)
     if not values:
         return
@@ -1114,18 +1609,12 @@ def _sort_layers(scene):
     scene.objects[:] = free
 
 
-# ============================================================= Emitter
+# ============================================================ Emitter
 
 class Emitter:
-    """Particle sprites that keep spawning over time. Each particle is a soft radial
-    glow that fades and shrinks over its life. Use blend="add" so overlapping glows
-    brighten each other, like light or sparks.
-
-    Scrub-safe: every particle's path is computed from its spawn index, not stepped
-    frame by frame. The pool holds exactly the particles alive at one moment, so
-    the object count stays fixed no matter how long the effect runs.
-    Note: each sprite is drawn as an effect layer, so keep rate * life modest (under ~150).
-    The emitter sets opacity and scale on its particles every frame. Do not set them yourself."""
+    """Particle glows that keep spawning over time. Use blend="add" for light or sparks.
+    Scrub-safe: each particle's path comes from its spawn index.
+    The emitter sets opacity and scale on its particles every frame."""
 
     def __init__(self, scene, name, x, y, rate=30.0, life=1.5, speed=300.0, gravity=300.0,
                  color="#FFD166", radius=8.0, start=0.0, spread=60.0, angle=-90.0,
@@ -1149,12 +1638,8 @@ class Emitter:
             obj = scene.get(pname)
             obj.blend = blend
             if sprite:
-                try:
-                    import effects as ex
-                    obj.gradient = ex.Gradient([(0.0, color), (1.0, "#000000")],
-                                               kind="radial", radius=0.5)
-                except Exception:
-                    pass   # without effects.py the sprite is a plain disc
+                obj.gradient = Gradient([(0.0, color), (1.0, "#000000")],
+                                        kind="radial", radius=0.5)
             self.names.append(pname)
         _register(scene, self)
 
@@ -1172,7 +1657,6 @@ class Emitter:
             obj.opacity = 0.0
             if newest < 0:
                 continue
-            # The latest particle that maps to this slot and has already spawned.
             k = newest - ((newest - slot) % self.pool)
             if k < 0:
                 continue

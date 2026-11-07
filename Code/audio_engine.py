@@ -242,7 +242,7 @@ class AudioScene:
         """Add a background sound that carries a mood. It is built from several tone layers.
         mood: happy, sad, calm, quiet, soft, loud, excited, tense, neutral.
         volume overrides the mood's default level, and fade_in/fade_out override its fades.
-        This shapes the background only. Speech emotion comes from the voice clip."""
+        This shapes the background only."""
         if mood not in MOODS:
             raise ValueError("Unknown mood %r. Use one of: %s" % (mood, ", ".join(MOODS)))
         preset = MOODS[mood]
@@ -277,27 +277,6 @@ class AudioScene:
                 except OSError:
                     pass
         self.events.append(_Clip(name, at, data, volume))
-
-    def render(self, speed=1.0):
-        """Mix all events into one stereo track on the output timeline.
-
-        The output is duration / speed seconds long, so it matches a video
-        exported at the same speed. Event times are divided by speed too."""
-        if not (0.0 < self.duration <= MAX_DURATION):
-            raise ValueError("Audio duration must be between 0 and %d seconds" % MAX_DURATION)
-        speed = max(0.05, float(speed))
-        sr = int(self.sample_rate)
-        out_len = int(round(self.duration / speed * sr))
-        buf = np.zeros((out_len, 2))
-        for ev in self.events:
-            seg = ev.render(sr, speed)
-            start = int(round(ev.start / speed * sr))
-            if len(seg) == 0 or start < 0 or start >= out_len:
-                continue
-            end = min(out_len, start + len(seg))
-            buf[start:end] += seg[:end - start]
-        buf *= self.master_volume
-        return np.clip(buf, -1.0, 1.0)
 
 
 def write_wav(path, stereo, sr):

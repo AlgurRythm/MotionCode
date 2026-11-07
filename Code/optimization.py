@@ -3,16 +3,12 @@ and the time-remaining estimate. Nothing here draws objects itself; the export
 worker receives the render function from features.py.
 """
 import os
-import subprocess
-import tempfile
 import time
-import traceback
-from pathlib import Path
 
 import threading
 
 import numpy as np
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage
 
 
@@ -141,138 +137,3 @@ def ffmpeg_failure_message(text, return_code=None):
     tail = lines[-4:]
     context = "\n".join(tail)
     return main + ("\n" + context if context != main else "")
-
-
-class ExportJob(QThread):
-    """Renders frames from a scene and writes them out. Runs on a background
-    thread when started with start(), or on the calling thread with run()."""
-    progress = Signal(int)
-    succeeded = Signal(str)
-    failed = Signal(str)
-    cancelled = Signal()
-
-    def __init__(self, scene, animate_fn, width, height, fps, speed, total, out_path,
-                 mode, cmd=None, temp_paths=(), render_fn=None):
-        super().__init__()
-        self.scene = scene
-        self.animate_fn = animate_fn
-        self.width = width
-        self.height = height
-        self.fps = fps
-        self.speed = speed
-        self.total = total
-        self.out_path = out_path
-        self.mode = mode
-        self.cmd = cmd
-        self.temp_paths = list(temp_paths)
-        self.render_fn = render_fn
-        self._cancel = False
-
-    def cancel(self):
-        self._cancel = True
-
-    def run(self):
-        try:
-            if self.mode == "png":
-                self._run_png()
-            else:
-                self._run_video()
-        finally:
-            for path in self.temp_paths:
-                _remove_quietly(path)
-
-    def _time_for(self, index):
-        return index * self.speed / self.fps
-
-    def _run_png(self):
-        skipped = 0
-        first_error = None
-        for index in range(self.total):
-            if self._cancel:
-                self.cancelled.emit()
-                return
-            try:
-                frame = self.render_fn(self.scene, self.animate_fn, self.width, self.height,
-                                       self._time_for(index), self.fps)
-                frame.save(str(Path(self.out_path) / f"frame_{index:05d}.png"))
-            except Exception as exc:
-                skipped += 1
-                if first_error is None:
-                    first_error = f"frame {index}: {type(exc).__name__}: {exc}"
-            self.progress.emit(index + 1)
-        note = f" ({skipped} frames skipped; first problem: {first_error})" if skipped else ""
-        self.succeeded.emit(f"PNG export finished: {self.total} frames{note}")
-
-    def _run_video(self):
-        frame_size = self.width * self.height * 4
-        row_bytes = self.width * 4
-        last_good = bytes(frame_size)
-        failed_frames = 0
-        first_error = None
-        error = None
-        cancelled = False
-
-        # Created before Popen so it is closed on every path.
-        stderr_log = tempfile.TemporaryFile()
-        try:
-            proc = subprocess.Popen(self.cmd, stdin=subprocess.PIPE, stderr=stderr_log)
-        except OSError as exc:
-            stderr_log.close()
-            self.failed.emit(f"could not start ffmpeg: {exc}")
-            return
-
-        try:
-            for index in range(self.total):
-                if self._cancel:
-                    cancelled = True
-                    break
-                try:
-                    frame = self.render_fn(self.scene, self.animate_fn, self.width, self.height,
-                                           self._time_for(index), self.fps)
-                    # Copy row by row: Qt may pad each row beyond width * 4 bytes.
-                    stride = frame.bytesPerLine()
-                    raw = bytes(frame.constBits())
-                    if stride == row_bytes:
-                        data = raw[:frame_size]
-                    else:
-                        data = b"".join(raw[r * stride:r * stride + row_bytes]
-                                        for r in range(self.height))
-                    last_good = data
-                except Exception as exc:
-                    # A broken frame repeats the last good one, so the video still finishes.
-                    failed_frames += 1
-                    if first_error is None:
-                        first_error = f"frame {index}: {type(exc).__name__}: {exc}"
-                    data = last_good
-                proc.stdin.write(data)
-                self.progress.emit(index + 1)
-        except BrokenPipeError:
-            error = "ffmpeg stopped reading frames."
-        except Exception:
-            error = traceback.format_exc()
-        finally:
-            try:
-                proc.stdin.close()
-            except Exception:
-                pass
-            # No return here: a return in finally would swallow exceptions.
-            return_code = proc.wait()
-            stderr_log.seek(0)
-            ffmpeg_output = stderr_log.read().decode("utf-8", errors="replace")[-4000:]
-            stderr_log.close()
-
-        if cancelled:
-            _remove_quietly(self.out_path)
-            self.cancelled.emit()
-            return
-        if error or return_code != 0:
-            _remove_quietly(self.out_path)
-            if error:
-                message = error + "\n" + ffmpeg_failure_message(ffmpeg_output, return_code)
-            else:
-                message = ffmpeg_failure_message(ffmpeg_output, return_code)
-            self.failed.emit(message)
-            return
-        note = f", {failed_frames} frames repeated after errors ({first_error})" if failed_frames else ""
-        self.succeeded.emit(f"Video saved: {Path(self.out_path).name} ({self.total} frames, "
-                            f"{self.width}×{self.height}, {self.fps} fps{note})")

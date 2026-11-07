@@ -82,6 +82,7 @@ class Track:
 class Scene:
     def __init__(self):
         self.objects = []
+        self._index = {}                 # object name -> position in self.objects
         self.background = "#080D18"
         self.duration = 10.0
         self.fps = 24
@@ -91,11 +92,20 @@ class Scene:
         self.camera_y = 0.0
         self.camera_z = -900.0
         self.camera_fov = 700.0
-        # Effects (see effects.py)
+        # Effects (see FeaturesPro.py)
         self.lights = []                 # list of effects.Light
         self.ambient = 0.35              # base brightness with no lights
         self.background_gradient = None  # effects.Gradient for the backdrop
         self.motion_blur_samples = 8     # sub-frames per frame when motion blur is on
+        # Whole-frame effects (see features.post_process). 0 means off.
+        self.bloom = 0.0
+        self.bloom_threshold = 0.8
+        self.bloom_radius = 12.0
+        self.vignette = 0.0
+        self.grain = 0.0
+        self.aberration = 0.0
+        self.grade = None
+        self.grade_strength = 0.0
         # Keyframes (applied after animate() on every frame)
         self.tracks = []
         # Filled in by the app so scripts can measure text and list fonts
@@ -108,10 +118,22 @@ class Scene:
         if self.get_optional(obj.name) is not None:
             raise ValueError("An object named %r already exists" % obj.name)
         self.objects.append(obj)
+        self._index[obj.name] = len(self.objects) - 1
         return obj
 
+    def _rebuild_index(self):
+        self._index = {o.name: i for i, o in enumerate(self.objects)}
+
     def get_optional(self, name):
-        return next((o for o in self.objects if o.name == name), None)
+        """Object with this name, or None. Uses a name -> position index. Each hit is
+        checked against the list, because layer reordering moves objects around; a stale
+        or missing entry triggers one rebuild."""
+        i = self._index.get(name)
+        if i is not None and i < len(self.objects) and self.objects[i].name == name:
+            return self.objects[i]
+        self._rebuild_index()
+        i = self._index.get(name)
+        return None if i is None else self.objects[i]
 
     def get(self, name):
         obj = self.get_optional(name)
@@ -243,7 +265,7 @@ class Base:
         self.opacity = float(opacity)
         self.stroke = float(stroke)
         self.filled = bool(filled)
-        # Effects (see effects.py and motion_fx.py). All can be passed as keyword arguments.
+        # Effects (see FeaturesPro.py). All can be passed as keyword arguments.
         self.scale_x = float(scale_x)           # stretch along the object's own x axis
         self.scale_y = float(scale_y)           # stretch along the object's own y axis
         self.skew_x = float(skew_x)             # slant in degrees

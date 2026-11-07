@@ -1,15 +1,16 @@
 """MotionCode projects and fonts.
 
-Projects: a project is a folder holding video.py and audio.py. The last folder
-used is remembered between sessions.
+Projects: a project is one file (.mcp). The video script comes first, then a
+separator line that starts with the pattern 000111000 and dashes, then the audio
+script. Saves are crash-safe: the new file is written to a temporary name, flushed to
+disk, and only then swapped in. The previous version is kept as <name>.mcp.bak.
+
+Storage: when packaged as an exe or app, projects, cache and assets live in folders
+created next to the app. When run from source, they live next to this file.
 
 Fonts: every .ttf or .otf file in the fonts folder is loaded when MotionCode
 starts, so scripts can use the family name directly:
     scene.add_text("Title", "HELLO", font="Oswald")
-
-The Fonts menu lists the default fonts with their licenses, the other fonts in
-the fonts folder, and an Import font action that copies a font file into the
-fonts folder and loads it.
 """
 import os
 import shutil
@@ -26,11 +27,11 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QVBoxLayout,
 )
 
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
-FONT_DIR = os.path.join(APP_DIR, "fonts")
+PROJECT_EXT = ".mcp"
+PROJECT_FILTER = "MotionCode project (*.mcp)"
+SEPARATOR_PATTERN = "000111000"
+SEPARATOR_LINE = SEPARATOR_PATTERN + "-" * 40
 FONT_EXTS = (".ttf", ".otf")
-VIDEO_NAME = "video.py"
-AUDIO_NAME = "audio.py"
 
 OFL = "SIL Open Font License 1.1"
 OFL_URL = "https://openfontlicense.org"
@@ -49,79 +50,115 @@ DEFAULT_FONTS = [
 ]
 
 
-# ------------------------------------------------------------- settings
+# ------------------------------------------------------------- storage
+
+def app_dir():
+    """Folder the app lives in. For a packaged exe this is the exe's folder."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def storage_dir(name):
+    """A writable folder inside the app folder, created on first use.
+    Used for 'projects', 'cache', 'assets' and 'fonts'."""
+    folder = os.path.join(app_dir(), name)
+    os.makedirs(folder, exist_ok=True)
+    return folder
+
 
 def _settings():
-    return QSettings("MotionCode", "MotionCode")
+    """Settings stored in a fixed file next to the app, so the remembered folder
+    survives moving or re-running the app."""
+    return QSettings(os.path.join(app_dir(), "motioncode_settings.ini"),
+                     QSettings.Format.IniFormat)
 
 
 def last_project_dir():
+    """The folder used last time, or the projects folder if none is remembered."""
     folder = _settings().value("project/last_dir", "", type=str)
-    return folder if folder and os.path.isdir(folder) else ""
+    return folder if folder and os.path.isdir(folder) else storage_dir("projects")
 
 
 def remember_project_dir(folder):
     _settings().setValue("project/last_dir", os.path.abspath(folder))
 
 
+def get_setting(key, default=""):
+    """A remembered preference (for example the colour theme), or default."""
+    return _settings().value(key, default, type=str)
+
+
+def set_setting(key, value):
+    _settings().setValue(key, value)
+
+
+# ------------------------------------------------------------- crash-safe writes
+
+def atomic_write_text(path, text):
+    """Write text so a crash cannot leave a half-written file. The old file stays
+    in place until the new one is fully on disk. The previous version is kept as
+    <path>.bak."""
+    folder = os.path.dirname(os.path.abspath(path))
+    os.makedirs(folder, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=folder, prefix=".mc_", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        if os.path.exists(path):
+            shutil.copyfile(path, path + ".bak")
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+
+
 # ------------------------------------------------------------- projects
 
-def save_project(folder, video_text, audio_text):
-    """Write video.py and audio.py into folder. Creates the folder if needed."""
-    os.makedirs(folder, exist_ok=True)
-    with open(os.path.join(folder, VIDEO_NAME), "w", encoding="utf-8") as f:
-        f.write(video_text)
-    with open(os.path.join(folder, AUDIO_NAME), "w", encoding="utf-8") as f:
-        f.write(audio_text)
-    remember_project_dir(folder)
-    return os.path.abspath(folder)
+def save_project_file(path, video_text, audio_text):
+    """Write one project file: video script, separator line, audio script. Crash-safe."""
+    if not path.lower().endswith(PROJECT_EXT):
+        path += PROJECT_EXT
+    body = video_text.rstrip("\n") + "\n" + SEPARATOR_LINE + "\n" + audio_text
+    atomic_write_text(path, body)
+    remember_project_dir(os.path.dirname(os.path.abspath(path)))
+    return os.path.abspath(path)
 
 
-LOAD_WARNINGS = []
-
-
-def _read_text(path):
-    """Read a project file. Bytes that are not UTF-8 are replaced, and a warning is kept
-    so the user knows to save the file again."""
+def load_project_file(path):
+    """Return (video_text, audio_text). The separator line marks where audio starts.
+    A file with no separator is returned as video only, with audio None."""
     with open(path, "r", encoding="utf-8", errors="replace") as f:
         text = f.read()
-    if "\ufffd" in text:
-        LOAD_WARNINGS.append(
-            "%s has bytes that are not UTF-8. They were replaced; save the file again to fix it."
-            % os.path.basename(path))
-    return text
-
-
-def load_project(folder):
-    """Return (video_text, audio_text). A missing file is returned as None.
-    Warnings about the files are kept in LOAD_WARNINGS."""
-    LOAD_WARNINGS.clear()
-    texts = []
-    for name in (VIDEO_NAME, AUDIO_NAME):
-        path = os.path.join(folder, name)
-        if os.path.exists(path):
-            texts.append(_read_text(path))
-        else:
-            texts.append(None)
-    remember_project_dir(folder)
-    return texts[0], texts[1]
+    remember_project_dir(os.path.dirname(os.path.abspath(path)))
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        if line.strip().startswith(SEPARATOR_PATTERN):
+            video = "\n".join(lines[:i]).rstrip("\n") + "\n"
+            audio = "\n".join(lines[i + 1:])
+            return video, audio
+    return text, None
 
 
 # ---------------------------------------------------------------- fonts
 
 def ensure_font_folder():
-    os.makedirs(FONT_DIR, exist_ok=True)
-    return FONT_DIR
+    return storage_dir("fonts")
 
 
 def load_project_fonts():
     """Load every font file in the fonts folder into the app. Returns the family names found.
     Call this after QApplication exists."""
-    ensure_font_folder()
+    folder = ensure_font_folder()
     families = []
-    for name in sorted(os.listdir(FONT_DIR)):
+    for name in sorted(os.listdir(folder)):
         if name.lower().endswith(FONT_EXTS):
-            font_id = QFontDatabase.addApplicationFont(os.path.join(FONT_DIR, name))
+            font_id = QFontDatabase.addApplicationFont(os.path.join(folder, name))
             if font_id >= 0:
                 families += QFontDatabase.applicationFontFamilies(font_id)
     return sorted(set(families))
@@ -134,16 +171,17 @@ def installed_names():
 
 def font_files():
     """Font files in the fonts folder, as file names."""
-    ensure_font_folder()
-    return sorted(n for n in os.listdir(FONT_DIR) if n.lower().endswith(FONT_EXTS))
+    folder = ensure_font_folder()
+    return sorted(n for n in os.listdir(folder) if n.lower().endswith(FONT_EXTS))
 
 
 def _unique_font_path(base, ext):
     """A path in the fonts folder that is not already taken: Name.ttf, Name_2.ttf, ..."""
-    target = os.path.join(FONT_DIR, base + ext)
+    folder = ensure_font_folder()
+    target = os.path.join(folder, base + ext)
     counter = 2
     while os.path.exists(target):
-        target = os.path.join(FONT_DIR, "%s_%d%s" % (base, counter, ext))
+        target = os.path.join(folder, "%s_%d%s" % (base, counter, ext))
         counter += 1
     return target
 
@@ -174,7 +212,6 @@ def import_font_file(source):
     safe = _safe_base(base)
     if not safe:
         raise RuntimeError("The file name %r cannot be used." % base)
-    ensure_font_folder()
     target = _unique_font_path(safe, ext)
     try:
         shutil.copyfile(source, target)
@@ -191,7 +228,6 @@ def install_font(name, url):
     ext = os.path.splitext(urlparse(url).path)[1].lower()
     if ext not in FONT_EXTS:
         raise RuntimeError("The link for %s must point to a .ttf or .otf file." % name)
-    ensure_font_folder()
     target = _unique_font_path(_safe_base(name), ext)
     fd, temp = tempfile.mkstemp(suffix=ext, prefix="motioncode_font_")
     os.close(fd)
@@ -218,17 +254,17 @@ def install_font(name, url):
 def open_font_folder():
     """Open the fonts folder. Returns None on success, or a message if it could not be opened.
     Never raises, so a menu action can show the message in the log."""
-    ensure_font_folder()
+    folder = ensure_font_folder()
     try:
         if sys.platform.startswith("win"):
-            os.startfile(FONT_DIR)
+            os.startfile(folder)
         elif sys.platform == "darwin":
-            subprocess.Popen(["open", FONT_DIR])
+            subprocess.Popen(["open", folder])
         else:
-            subprocess.Popen(["xdg-open", FONT_DIR])
+            subprocess.Popen(["xdg-open", folder])
         return None
     except (OSError, AttributeError) as exc:
-        return "Could not open the fonts folder (%s). It is at: %s" % (exc, FONT_DIR)
+        return "Could not open the fonts folder (%s). It is at: %s" % (exc, folder)
 
 
 def import_font_at(path, log, installed_cb):
@@ -344,9 +380,9 @@ class FontsDialog(QDialog):
 
 
 def build_fonts_menu(parent, log, installed_cb):
-    """A Fonts menu for the menu bar, next to File. Items: show default fonts and their
-    licenses, import a font, open the fonts folder. Returns the QMenu.
-    Keep a reference to it (features.py stores it on self) so Qt does not drop it."""
+    """A Fonts menu for the menu bar. Items: default fonts and licenses, import a font,
+    open the fonts folder. Returns the QMenu.
+    Keep a reference to it so Qt does not drop it."""
     menu = QMenu("Fonts", parent)
 
     def show_dialog():
@@ -369,9 +405,8 @@ def build_fonts_menu(parent, log, installed_cb):
     return menu
 
 
-
 class FontLibraryButton(QPushButton):
-    """Compatibility button for older features.py files. Opens the Fonts and licenses dialog."""
+    """Button that opens the Fonts and licenses dialog."""
 
     def __init__(self, parent, log, installed_cb):
         super().__init__("Fonts", parent)
