@@ -13,7 +13,7 @@ live preview, and exports finished video, GIF, image sequence or audio files.
 
 ## The Tutorial
 
-If you want to understand the app without code, open [Basic.md](Basic.md). It explains every task
+If you want to understand the app without code, open [Basic.md](https://github.com/WinterRupert/MotionCode/blob/main/Basics.md)). It explains every task
 in plain language: changing the motion and sound, the theme, settings, export, saving,
 opening projects, fonts, credits and the Data folder.
 
@@ -45,7 +45,7 @@ combine the tools into a good animation, or how the parts interact in a real pro
 
 To learn the whole system, download the code library here:
 
-**[Download Motion-Code-Library.md](PASTE-YOUR-CODE-LINK-HERE)**
+**[Download Motion-Code-Library.md](https://github.com/WinterRupert/MotionCode/blob/main/Motion-Code-Library.md))**
 
 Give that file and this reference to an AI assistant that can read them together.
 
