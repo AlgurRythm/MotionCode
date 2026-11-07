@@ -11,7 +11,7 @@ live preview, and exports finished video, GIF, image sequence or audio files.
 
 **Vince Winter** and **Claude By Anthropic**
 
-## Start here
+## The Tutorial
 
 If you want to understand the app without code, open [Basic.md](Basic.md). It explains every task
 in plain language: changing the motion and sound, the theme, settings, export, saving,
