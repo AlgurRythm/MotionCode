@@ -9,7 +9,7 @@ live preview, and exports finished video, GIF, image sequence or audio files.
 
 ## Owner
 
-**Vince Winter** and **Claude By Anthropic**
+**@Meoweathurr (tiktok/github)** and **Claude By Anthropic**
 
 ## The Tutorial
 
