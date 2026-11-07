@@ -36,6 +36,26 @@ opening projects, fonts, credits and the Data folder.
 6. **Files.** Projects are `.mcp` files holding both scripts. Settings, cache, fonts, assets and
    3D models live in the Data folder next to the program.
 
+
+## Install (Windows)
+
+1. Go to the **Releases** page of this repository and download the latest **.zip** file.
+2. Right-click the zip, choose **Extract All**, and pick a folder you will keep, such as `C:\MotionCode`.
+3. Open the extracted **MotionCode** folder and double-click **MotionCode.exe**.
+   If Windows shows "Windows protected your PC", click **More info**, then **Run anyway**.
+   This happens because the program is new and not signed by a large software company.
+
+**Keep the whole folder together.** The program needs the **Data** folder next to the .exe for
+its settings, fonts, projects and credits. Moving the exe alone will lose them.
+
+**Please keep the credits.** Do not remove the Credits or licence files in the Data folder.
+Removing them goes against the terms of use.
+
+**To update:** download the newer release, extract it to a new folder, and copy your old
+**Data** folder into it.
+
+**Tested on Windows only.** Linux and Mac are not supported at this time.
+
 ---
 
 ## Full understanding needs an AI
