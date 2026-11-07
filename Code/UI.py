@@ -61,8 +61,10 @@ except Exception as _audio_error:
 try:
     from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
     MULTIMEDIA_OK = True
-except Exception:
+    MULTIMEDIA_ERROR = ""
+except Exception as _mm_error:
     MULTIMEDIA_OK = False
+    MULTIMEDIA_ERROR = f"{type(_mm_error).__name__}: {_mm_error}"
 
 
 # Storage folders resolve next to the app (or the exe when packaged).
@@ -1007,6 +1009,8 @@ class Main(QMainWindow):
         # Find ffmpeg now, in the background, so the Export dialog opens without a pause.
         QTimer.singleShot(0, warm_up_ffmpeg)
         self.log("MotionCode started")
+        if getattr(self, "_startup_notice", None):
+            self.log(self._startup_notice, error=True)
         if self.fonts_loaded:
             self.log("Fonts loaded: " + ", ".join(self.fonts_loaded))
         if not AUDIO_ENGINE_OK:
@@ -1299,6 +1303,9 @@ class Main(QMainWindow):
 
     def _setup_player(self):
         if not MULTIMEDIA_OK:
+            # The log panel is not built yet at this point, so the message is shown later.
+            self._startup_notice = (f"Audio preview is off: the sound system could not load "
+                                    f"({MULTIMEDIA_ERROR}). Export still includes sound.")
             return
         try:
             self._player = QMediaPlayer(self)
